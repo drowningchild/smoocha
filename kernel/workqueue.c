@@ -3301,27 +3301,7 @@ EXPORT_SYMBOL_GPL(work_busy);
 	__ret1 < 0 ? -1 : 0;						\
 })
 
-static bool gcwq_is_managing_workers(struct global_cwq *gcwq)
-{
-	struct worker_pool *pool;
-
-	for_each_worker_pool(pool, gcwq)
-		if (pool->flags & POOL_MANAGING_WORKERS)
-			return true;
-	return false;
-}
-
-static bool gcwq_has_idle_workers(struct global_cwq *gcwq)
-{
-	struct worker_pool *pool;
-
-	for_each_worker_pool(pool, gcwq)
-		if (!list_empty(&pool->idle_list))
-			return true;
-	return false;
-}
-
-static int __cpuinit trustee_thread(void *__gcwq)
+static int trustee_thread(void *__gcwq)
 {
 	struct global_cwq *gcwq = __gcwq;
 	struct worker_pool *pool;
@@ -3510,7 +3490,7 @@ static int __cpuinit trustee_thread(void *__gcwq)
  * spin_lock_irq(gcwq->lock) which may be released and regrabbed
  * multiple times.  To be used by cpu_callback.
  */
-static void __cpuinit wait_trustee_state(struct global_cwq *gcwq, int state)
+static void wait_trustee_state(struct global_cwq *gcwq, int state)
 __releases(&gcwq->lock)
 __acquires(&gcwq->lock)
 {
@@ -3524,7 +3504,7 @@ __acquires(&gcwq->lock)
 	}
 }
 
-static int __devinit workqueue_cpu_callback(struct notifier_block *nfb,
+static int workqueue_cpu_callback(struct notifier_block *nfb,
 						unsigned long action,
 						void *hcpu)
 {
@@ -3624,19 +3604,6 @@ static int __devinit workqueue_cpu_callback(struct notifier_block *nfb,
 	spin_unlock_irqrestore(&gcwq->lock, flags);
 
 	return notifier_from_errno(0);
-
-err_destroy:
-	if (new_trustee)
-		kthread_stop(new_trustee);
-
-	spin_lock_irqsave(&gcwq->lock, flags);
-	for (i = 0; i < NR_WORKER_POOLS; i++)
-		if (new_workers[i])
-			destroy_worker(new_workers[i]);
-	spin_unlock_irqrestore(&gcwq->lock, flags);
-
-	return NOTIFY_BAD;
-}
 
 #ifdef CONFIG_SMP
 

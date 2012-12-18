@@ -41,7 +41,18 @@ struct per_cpu_data {
 
 static uint32_t *msm8625_boot_vector;
 
-static struct per_cpu_data cpu_data[CONFIG_NR_CPUS];
+/*
+ * Write pen_release in a way that is guaranteed to be visible to all
+ * observers, irrespective of whether they're taking part in coherency
+ * or not.  This is necessary for the hotplug code to work reliably.
+ */
+static void write_pen_release(int val)
+{
+	pen_release = val;
+	smp_wmb();
+	__cpuc_flush_dcache_area((void *)&pen_release, sizeof(pen_release));
+	outer_clean_range(__pa(&pen_release), __pa(&pen_release + 1));
+}
 
 static void __iomem *scu_base_addr(void)
 {
@@ -80,7 +91,7 @@ static void clear_pending_spi(unsigned int irq)
 	local_irq_enable();
 }
 
-void __cpuinit msm8625_platform_secondary_init(unsigned int cpu)
+void platform_secondary_init(unsigned int cpu)
 {
 	WARN_ON(msm_platform_secondary_init(cpu));
 
@@ -111,7 +122,7 @@ void __cpuinit msm8625_platform_secondary_init(unsigned int cpu)
 	spin_unlock(&boot_lock);
 }
 
-static int __cpuinit msm8625_release_secondary(unsigned int cpu)
+static int  msm8625_release_secondary(void)
 {
 	void __iomem *base_ptr;
 	int value = 0;
@@ -155,7 +166,7 @@ void __iomem *core_reset_base(unsigned int cpu)
 	return cpu_data[cpu].reset_core_base;
 }
 
-int __cpuinit msm8625_boot_secondary(unsigned int cpu, struct task_struct *idle)
+int boot_secondary(unsigned int cpu, struct task_struct *idle)
 {
 	unsigned long timeout;
 

@@ -47,7 +47,7 @@ volatile int pen_release = -1;
  * observers, irrespective of whether they're taking part in coherency
  * or not.  This is necessary for the hotplug code to work reliably.
  */
-void __cpuinit write_pen_release(int val)
+static void write_pen_release(int val)
 {
 	pen_release = val;
 	smp_wmb();
@@ -57,7 +57,7 @@ void __cpuinit write_pen_release(int val)
 
 static DEFINE_SPINLOCK(boot_lock);
 
-void __cpuinit platform_secondary_init(unsigned int cpu)
+void platform_secondary_init(unsigned int cpu)
 {
 	WARN_ON(msm_platform_secondary_init(cpu));
 
@@ -81,7 +81,7 @@ void __cpuinit platform_secondary_init(unsigned int cpu)
 	spin_unlock(&boot_lock);
 }
 
-static int __cpuinit release_secondary_sim(unsigned long base, unsigned int cpu)
+static int scorpion_release_secondary(void)
 {
 	void *base_ptr = ioremap_nocache(base + (cpu * 0x10000), SZ_4K);
 	if (!base_ptr)
@@ -95,7 +95,7 @@ static int __cpuinit release_secondary_sim(unsigned long base, unsigned int cpu)
 	return 0;
 }
 
-static int __cpuinit scorpion_release_secondary(void)
+static int krait_release_secondary_sim(unsigned long base, int cpu)
 {
 	void *base_ptr = ioremap_nocache(0x00902000, SZ_4K*2);
 	if (!base_ptr)
@@ -111,8 +111,7 @@ static int __cpuinit scorpion_release_secondary(void)
 	return 0;
 }
 
-static int __cpuinit msm8960_release_secondary(unsigned long base,
-						unsigned int cpu)
+static int krait_release_secondary(unsigned long base, int cpu)
 {
 	void *base_ptr = ioremap_nocache(base + (cpu * 0x10000), SZ_4K);
 	if (!base_ptr)
@@ -143,8 +142,7 @@ static int __cpuinit msm8960_release_secondary(unsigned long base,
 	return 0;
 }
 
-static int __cpuinit msm8974_release_secondary(unsigned long base,
-						unsigned int cpu)
+static int krait_release_secondary_p3(unsigned long base, int cpu)
 {
 	void *base_ptr = ioremap_nocache(base + (cpu * 0x10000), SZ_4K);
 
@@ -170,7 +168,7 @@ static int __cpuinit msm8974_release_secondary(unsigned long base,
 	return 0;
 }
 
-static int __cpuinit arm_release_secondary(unsigned long base, unsigned int cpu)
+static int release_secondary(unsigned int cpu)
 {
 	void *base_ptr = ioremap_nocache(base + (cpu * 0x10000), SZ_4K);
 	if (!base_ptr)
@@ -201,11 +199,7 @@ static int __cpuinit arm_release_secondary(unsigned long base, unsigned int cpu)
 	writel_relaxed(0x00020088, base_ptr+0x04);
 	mb();
 
-	iounmap(base_ptr);
-	return 0;
-}
-
-static int __cpuinit release_from_pen(unsigned int cpu)
+int boot_secondary(unsigned int cpu, struct task_struct *idle)
 {
 	unsigned long timeout;
 
