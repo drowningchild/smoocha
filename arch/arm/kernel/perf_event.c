@@ -756,7 +756,7 @@ static struct platform_device_id armpmu_plat_device_ids[] = {
 	{},
 };
 
-static int __devinit armpmu_device_probe(struct platform_device *pdev)
+static int armpmu_device_probe(struct platform_device *pdev)
 {
 	if (!cpu_pmu)
 		return -ENODEV;
@@ -845,7 +845,7 @@ static void armpmu_update_counters(void)
  * UNKNOWN at reset, the PMU must be explicitly reset to avoid reading
  * junk values out of them.
  */
-static int __cpuinit pmu_cpu_notify(struct notifier_block *b,
+static int pmu_cpu_notify(struct notifier_block *b,
 					unsigned long action, void *hcpu)
 {
 	int irq;
@@ -897,7 +897,7 @@ static int __cpuinit pmu_cpu_notify(struct notifier_block *b,
 	return NOTIFY_OK;
 }
 
-static struct notifier_block __cpuinitdata pmu_cpu_notifier = {
+static struct notifier_block pmu_cpu_notifier = {
 	.notifier_call = pmu_cpu_notify,
 };
 

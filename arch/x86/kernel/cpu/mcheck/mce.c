@@ -1948,7 +1948,6 @@ static struct bus_type mce_subsys = {
 
 DEFINE_PER_CPU(struct device *, mce_device);
 
-__cpuinitdata
 void (*threshold_cpu_callback)(unsigned long action, unsigned int cpu);
 
 static inline struct mce_bank *attr_to_bank(struct device_attribute *attr)
@@ -2197,7 +2196,7 @@ static void __cpuinit mce_reenable_cpu(void *h)
 }
 
 /* Get notified when a cpu comes on/off. Be hotplug friendly. */
-static int __cpuinit
+static int
 mce_cpu_callback(struct notifier_block *nfb, unsigned long action, void *hcpu)
 {
 	unsigned int cpu = (unsigned long)hcpu;
@@ -2238,7 +2237,7 @@ mce_cpu_callback(struct notifier_block *nfb, unsigned long action, void *hcpu)
 	return NOTIFY_OK;
 }
 
-static struct notifier_block mce_cpu_notifier __cpuinitdata = {
+static struct notifier_block mce_cpu_notifier = {
 	.notifier_call = mce_cpu_callback,
 };
 

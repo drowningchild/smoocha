@@ -959,8 +959,8 @@ static void __init dcvs_freq_init(void)
 				drv.acpu_freq_tbl[i].vdd_core / 1000);
 }
 
-static int __cpuinit acpuclk_cpu_callback(struct notifier_block *nfb,
-					    unsigned long action, void *hcpu)
+ static int acpuclk_cpu_callback(struct notifier_block *nfb,
+               unsigned long action, void *hcpu)
 {
 	static int prev_khz[NR_CPUS];
 	int rc, cpu = (int)hcpu;
@@ -1011,7 +1011,7 @@ static int __cpuinit acpuclk_cpu_callback(struct notifier_block *nfb,
 	return NOTIFY_OK;
 }
 
-static struct notifier_block __cpuinitdata acpuclk_cpu_notifier = {
+static struct notifier_block acpuclk_cpu_notifier = {
 	.notifier_call = acpuclk_cpu_callback,
 };
 
