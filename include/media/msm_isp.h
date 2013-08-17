@@ -135,7 +135,6 @@
 #define VFE_CMD_EPOCH2_ACK                              58
 #define VFE_CMD_START_RECORDING                         59
 #define VFE_CMD_STOP_RECORDING                          60
-#define VFE_CMD_DUMMY_5                                 61
 #define VFE_CMD_DUMMY_6                                 62
 #define VFE_CMD_CAPTURE                                 63
 #define VFE_CMD_DUMMY_7                                 64
@@ -355,7 +354,7 @@ struct msm_vpe_clock_rate {
 #define	VFE_RDI_NON_COMPOSITE			(1 << 1)
 
 #define VFE_STATS_TYPE_LEGACY		0
-#define VFE_STATS_TYPE_BAYER		(1 << 2)
+#define VFE_STATS_TYPE_BAYER		(1 << 2)\
 
 struct msm_frame_info {
 	uint32_t inst_handle;

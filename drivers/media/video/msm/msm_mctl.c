@@ -652,6 +652,10 @@ static void msm_mctl_release(struct msm_cam_media_controller *p_mctl)
 	if (p_mctl->opencnt) {
 		v4l2_subdev_call(p_mctl->sensor_sdev, core, ioctl,
 			VIDIOC_MSM_SENSOR_RELEASE, NULL);
+	pr_err("%s called\n", __func__); /* LGE_CHANGE, patch for IOMMU page fault, 2012.09.06, jungryoul.choi@lge.com */
+
+	v4l2_subdev_call(p_mctl->sensor_sdev, core, ioctl,
+		VIDIOC_MSM_SENSOR_RELEASE, NULL);
 
 		if (p_mctl->csic_sdev) {
 			v4l2_subdev_call(p_mctl->csic_sdev, core, ioctl,
@@ -686,6 +690,9 @@ static void msm_mctl_release(struct msm_cam_media_controller *p_mctl)
 		}
 
 		v4l2_subdev_call(p_mctl->sensor_sdev, core, s_power, 0);
+	v4l2_subdev_call(p_mctl->sensor_sdev, core, s_power, 0);
+	pr_err("%s called X\n", __func__); /* LGE_CHANGE, patch for IOMMU page fault, 2012.09.06, jungryoul.choi@lge.com */
+	p_mctl->hardware_running = 0; /* LGE_CHANGE, patch for IOMMU page fault, 2012.09.06, jungryoul.choi@lge.com */
 
 		v4l2_subdev_call(p_mctl->ispif_sdev,
 				core, ioctl, VIDIOC_MSM_ISPIF_REL, NULL);
@@ -1576,6 +1583,8 @@ static int msm_mctl_vidbuf_get_path(u32 extendedmode)
 		return OUTPUT_TYPE_R1;
 	case MSM_V4L2_EXT_CAPTURE_MODE_RDI2:
 		return OUTPUT_TYPE_R2;
+	case MSM_V4L2_EXT_CAPTURE_MODE_DEFAULT:
+	case MSM_V4L2_EXT_CAPTURE_MODE_PREVIEW:
 	default:
 		return OUTPUT_TYPE_P;
 	}

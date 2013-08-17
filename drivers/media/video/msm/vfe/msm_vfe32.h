@@ -126,8 +126,8 @@
 #define VFE_IRQ_STATUS0_ASYNC_TIMER2  0x40000000  /* bit 30 */
 #define VFE_IRQ_STATUS0_ASYNC_TIMER3  0x80000000  /* bit 32 */
 
-#define VFE_IRQ_STATUS1_RDI0_REG_UPDATE_MASK  0x4000000 /*bit 26*/
-#define VFE_IRQ_STATUS1_RDI1_REG_UPDATE_MASK  0x8000000 /*bit 27*/
+#define VFE_IRQ_STATUS1_RDI0_REG_UPDATE_MASK  0x4000000  /*bit 26*/
+#define VFE_IRQ_STATUS1_RDI1_REG_UPDATE_MASK  0x8000000  /*bit 27*/
 #define VFE_IRQ_STATUS1_RDI2_REG_UPDATE_MASK  0x10000000 /*bit 28*/
 
 /*TODOs the irq status passed from axi to vfe irq handler does not account

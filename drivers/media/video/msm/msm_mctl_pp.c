@@ -148,6 +148,13 @@ static int is_buf_in_queue(struct msm_cam_v4l2_device *pcam,
 			spin_unlock_irqrestore(&pcam_inst->vq_irqlock, flags);
 			return 0;
 		}
+//Start LGE_BSP_CAMERA : Fixed WBT - jonghwan.ko@lge.com
+		if(mem == NULL){
+			pr_err("%s:mem is NULL, pcam_inst->vid_fmt.type=%d",__func__, pcam_inst->vid_fmt.type);
+			spin_unlock_irqrestore(&pcam_inst->vq_irqlock, flags);
+			return 0;
+		}		
+//End  LGE_BSP_CAMERA : Fixed WBT - jonghwan.ko@lge.com
 		if (mem->buffer_type ==	VIDEOBUF2_MULTIPLE_PLANES)
 			offset = mem->offset.data_offset +
 				pcam_inst->buf_offset[buf_idx][0].data_offset;
@@ -325,6 +332,12 @@ int msm_mctl_do_pp_divert(
 					__func__, pcam_inst, buf_idx);
 				return -EINVAL;
 			}
+//Start LGE_BSP_CAMERA : Fixed WBT - jonghwan.ko@lge.com
+		if(mem == NULL){
+			pr_err("%s:mem is NULL, pcam_inst->vid_fmt.type=%d",__func__, pcam_inst->vid_fmt.type);
+			return -EINVAL;
+		}		
+//End  LGE_BSP_CAMERA : Fixed WBT - jonghwan.ko@lge.com
 			div.frame.mp[i].phy_addr =
 				videobuf2_to_pmem_contig(&vb->vidbuf, i);
 			if (!pcam_inst->buf_offset)
@@ -372,6 +385,12 @@ static int msm_mctl_pp_get_phy_addr(
 			pcam_inst, buf_idx);
 		return -EINVAL;
 	}
+//Start LGE_BSP_CAMERA : Fixed WBT - jonghwan.ko@lge.com
+		if(mem == NULL){
+			pr_err("%s:mem is NULL, pcam_inst->vid_fmt.type=%d",__func__, pcam_inst->vid_fmt.type);
+			return -EINVAL;
+		}		
+//End  LGE_BSP_CAMERA : Fixed WBT - jonghwan.ko@lge.com
 	pp_frame->image_type = (unsigned short)mem->path;
 	if (mem->buffer_type == VIDEOBUF2_SINGLE_PLANE) {
 		pp_frame->num_planes = 1;
@@ -725,6 +744,8 @@ int msm_mctl_pp_divert_done(
 	ret_frame.timestamp = frame.timestamp;
 	ret_frame.frame_id  = frame.frame_id;
 	D("%s Frame done id: %d\n", __func__, frame.frame_id);
+	ret_frame.frameid = frame.frame_id;
+	D("%s Frame done id: %d buffer idx %d\n", __func__, frame.frame_id, frame.buf_idx);
 	rc = msm_mctl_buf_done_pp(p_mctl, &buf_handle, &buf, &ret_frame);
 	return rc;
 }

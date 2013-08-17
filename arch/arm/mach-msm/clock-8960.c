@@ -5400,12 +5400,32 @@ static struct clk_lookup msm_clocks_8064[] = {
 	CLK_LOOKUP("iface_clk",		pmic_arb1_p_clk.c,	""),
 	CLK_LOOKUP("core_clk",		pmic_ssbi2_clk.c,	""),
 	CLK_LOOKUP("mem_clk",		rpm_msg_ram_p_clk.c,	""),
+#if defined(CONFIG_MACH_LGE)
+  /* LGE_CHANGE_S, For GV/GK 13M & 2.4M camera driver, 2012.07.20, gayoung85.lee@lge.com */
+#if defined(CONFIG_MACH_APQ8064_GKKT) ||defined(CONFIG_MACH_APQ8064_GKSK) ||defined(CONFIG_MACH_APQ8064_GKU) ||defined(CONFIG_MACH_APQ8064_GKATT) || defined(CONFIG_MACH_APQ8064_GVDCM)
+	CLK_LOOKUP("cam_clk",    	cam0_clk.c,    "4-0078"), /* GSBI4, Slave Addr: 0x78, ce1702 */
+	CLK_LOOKUP("cam_clk",    	cam2_clk.c,     "4-006c"), /* GSBI4, Slave Addr: 0x6e, imx132 */
+#endif
+  /* LGE_CHANGE_E, For GV/GK 13M & 2.4M camera driver, 2012.07.20, gayoung85.lee@lge.com */
+  
+#if 1 //def CONFIG_MACH_APQ8064_J1VD
+	CLK_LOOKUP("cam_clk",    	cam0_clk.c,    "4-000d"), /* GSBI4, Slave Addr: 0x0d, imx111 */
+  /* LGE_CHANGE_S, for old HW (LGU Rev.A,B VZW Rev.A,B ATT Rev.A), 2012.04.27, jungryoul.choi@lge.com */
+#if 1
+	CLK_LOOKUP("cam_clk",    	cam2_clk.c,    "4-006e"), /* GSBI4, Slave Addr: 0x6e, imx119 *//* LGE_CHANGE_S, Using MCLK2, soojung.lim@lge.com */
+#else
+	CLK_LOOKUP("cam_clk",    	cam1_clk.c,    "4-006e"), /* GSBI4, Slave Addr: 0x6e, imx119 *//* LGE_CHANGE_S, Using MCLK2, soojung.lim@lge.com */
+#endif
+  /* LGE_CHANGE_S, for old HW (LGU Rev.A,B VZW Rev.A,B ATT Rev.A), 2012.04.27, jungryoul.choi@lge.com */
+#endif
+#else /* QCT Original */
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-001a"),
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-0010"),
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-0034"),
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-0020"),
 	CLK_LOOKUP("cam_clk",		cam1_clk.c,	"4-0048"),
 	CLK_LOOKUP("cam_clk",		cam1_clk.c,	"4-006c"),
+#endif
 	CLK_LOOKUP("csi_src_clk",	csi0_src_clk.c,		"msm_csid.0"),
 	CLK_LOOKUP("csi_src_clk",	csi1_src_clk.c,		"msm_csid.1"),
 	CLK_LOOKUP("csi_src_clk",	csi2_src_clk.c,		"msm_csid.2"),
@@ -5762,13 +5782,27 @@ static struct clk_lookup msm_clocks_8960_common[] __initdata = {
 	CLK_LOOKUP("iface_clk",		pmic_arb1_p_clk.c,	""),
 	CLK_LOOKUP("core_clk",		pmic_ssbi2_clk.c,	""),
 	CLK_LOOKUP("mem_clk",		rpm_msg_ram_p_clk.c,	""),
+#if defined(CONFIG_MACH_LGE)
+  /* LGE_CHANGE_S, For GV/GK 13M & 2.4M camera driver, 2012.07.20, gayoung85.lee@lge.com */
+#if defined(CONFIG_MACH_APQ8064_GKKT) ||defined(CONFIG_MACH_APQ8064_GKSK) ||defined(CONFIG_MACH_APQ8064_GKU) ||defined(CONFIG_MACH_APQ8064_GKATT)
+	CLK_LOOKUP("cam_clk",     	cam0_clk.c, 		"4-0078"), /* GSBI4, Slave Addr: 0x78, ce1702 */
+	CLK_LOOKUP("cam_clk",      	cam1_clk.c, 		"4-006c"), /* GSBI4, Slave Addr: 0x6c, imx132 */
+#endif
+  /* LGE_CHANGE_E, For GV/GK 13M & 2.4M camera driver, 2012.07.20, gayoung85.lee@lge.com */
+#ifdef CONFIG_MACH_APQ8064_J1VD
+	CLK_LOOKUP("cam_clk",      	cam0_clk.c, 		"4-000d"), /* GSBI4, Slave Addr: 0x0d, imx111 */
+	CLK_LOOKUP("cam_clk",      	cam1_clk.c, 		"4-006e"), /* GSBI4, Slave Addr: 0x6e, imx119 */
+#endif
+#else /* QCT Original */
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-001a"),
-	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-0010"),
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-006c"),
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-0048"),
 	CLK_LOOKUP("cam_clk",		cam2_clk.c,		NULL),
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-0020"),
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-0034"),
+        CLK_LOOKUP("cam_clk",           cam0_clk.c,     "4-0036"),
+        CLK_LOOKUP("cam_clk",           cam0_clk.c,     "4-0010"),
+#endif
 	CLK_LOOKUP("csi_src_clk",	csi0_src_clk.c,		"msm_csid.0"),
 	CLK_LOOKUP("csi_src_clk",	csi1_src_clk.c,		"msm_csid.1"),
 	CLK_LOOKUP("csi_src_clk",	csi2_src_clk.c,		"msm_csid.2"),
@@ -6125,13 +6159,6 @@ static struct clk_lookup msm_clocks_8930[] = {
 	CLK_LOOKUP("cam_clk",		cam1_clk.c,	"4-0048"),
 	CLK_LOOKUP("cam_clk",		cam2_clk.c,		NULL),
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-0020"),
-	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"8-001a"),
-	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"8-0036"),
-	CLK_LOOKUP("cam_clk",		cam1_clk.c,	"8-006c"),
-	CLK_LOOKUP("cam_clk",		cam1_clk.c,	"8-0010"),
-	CLK_LOOKUP("cam_clk",		cam1_clk.c,	"8-0048"),
-	CLK_LOOKUP("cam_clk",		cam2_clk.c,		NULL),
-	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"8-0020"),
 	CLK_LOOKUP("csi_src_clk",	csi0_src_clk.c,		"msm_csid.0"),
 	CLK_LOOKUP("csi_src_clk",	csi1_src_clk.c,		"msm_csid.1"),
 	CLK_LOOKUP("csi_src_clk",	csi2_src_clk.c,		"msm_csid.2"),

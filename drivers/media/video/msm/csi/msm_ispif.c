@@ -117,7 +117,7 @@ static void msm_ispif_sel_csid_core(struct ispif_device *ispif,
 	uint8_t intftype, uint8_t csid, uint8_t vfe_intf)
 {
 	int rc = 0;
-	uint32_t data = 0;
+	uint32_t data;
 
 	if (ispif->csid_version <= CSID_VERSION_V2) {
 		if (ispif->ispif_clk[intftype] == NULL) {
@@ -130,6 +130,9 @@ static void msm_ispif_sel_csid_core(struct ispif_device *ispif,
 	}
 	data = msm_camera_io_r(ispif->base + ISPIF_INPUT_SEL_ADDR +
 		(0x200 * vfe_intf));
+
+	pr_err("%s: intftype = %d reg=%d , csid =%d \n", __func__,intftype, data,csid );
+	
 	switch (intftype) {
 	case PIX0:
 		data &= ~(0x3);
@@ -259,15 +262,15 @@ static int msm_ispif_config(struct ispif_device *ispif,
 	uint8_t vfe_intf;
 	params_len = params_list->len;
 	ispif_params = params_list->params;
-	CDBG("Enable interface\n");
+	pr_err("[RDI] %s: Enable interface\n",__func__);
 	msm_camera_io_w(0x00000000, ispif->base + ISPIF_IRQ_MASK_ADDR);
 	msm_camera_io_w(0x00000000, ispif->base + ISPIF_IRQ_MASK_1_ADDR);
 	msm_camera_io_w(0x00000000, ispif->base + ISPIF_IRQ_MASK_2_ADDR);
 	for (i = 0; i < params_len; i++) {
 		intftype = ispif_params[i].intftype;
 		vfe_intf = ispif_params[i].vfe_intf;
-		CDBG("%s intftype %x, vfe_intf %d, csid %d\n", __func__,
-			intftype, vfe_intf, ispif_params[i].csid);
+		pr_err("%s intftype %x, vfe_intf %d, cid_mask %d\n", __func__, intftype,
+			vfe_intf,ispif_params[i].cid_mask);
 		if ((intftype >= INTF_MAX) ||
 			(ispif->csid_version <= CSID_VERSION_V2 &&
 			vfe_intf > VFE0) ||
@@ -586,7 +589,7 @@ static void ispif_process_irq(struct ispif_device *ispif,
 
 	if (qcmd->ispifInterruptStatus0 &
 			ISPIF_IRQ_STATUS_PIX_SOF_MASK) {
-			CDBG("%s: ispif PIX irq status\n", __func__);
+			//printk(KERN_EMERG "[CAM] %s: ispif PIX irq status", __func__);
 			ispif->pix_sof_count++;
 			v4l2_subdev_notify(&ispif->subdev,
 				NOTIFY_VFE_PIX_SOF_COUNT,
@@ -595,6 +598,7 @@ static void ispif_process_irq(struct ispif_device *ispif,
 
 	if (qcmd->ispifInterruptStatus0 &
 			ISPIF_IRQ_STATUS_RDI0_SOF_MASK) {
+			//printk(KERN_EMERG "[CAM] %s: RDI0 SOF\n", __func__);
 			ispif->rdi0_sof_count++;
 			CDBG("%s: ispif RDI0 irq status, counter = %d",
 				__func__, ispif->rdi0_sof_count);
@@ -602,6 +606,13 @@ static void ispif_process_irq(struct ispif_device *ispif,
 	}
 	if (qcmd->ispifInterruptStatus1 &
 		ISPIF_IRQ_STATUS_RDI1_SOF_MASK) {
+
+#ifdef CONFIG_CE1702
+		{
+			extern int ce1702_irq_log;
+			if (ce1702_irq_log) printk(KERN_EMERG "[CAM] %s: RDI1 SOF\n", __func__);
+		}
+#endif
 		ispif->rdi1_sof_count++;
 		CDBG("%s: ispif RDI1 irq status, counter = %d",
 			__func__, ispif->rdi1_sof_count);
@@ -609,6 +620,12 @@ static void ispif_process_irq(struct ispif_device *ispif,
 	}
 	if (qcmd->ispifInterruptStatus2 &
 		ISPIF_IRQ_STATUS_RDI2_SOF_MASK) {
+#ifdef CONFIG_CE1702
+		{
+			extern int ce1702_irq_log;
+			if (ce1702_irq_log) printk(KERN_EMERG "[CAM] %s: RDI2 SOF\n", __func__);
+		}
+#endif
 		ispif->rdi2_sof_count++;
 		CDBG("%s: ispif RDI2 irq status, counter = %d",
 			__func__, ispif->rdi2_sof_count);
@@ -646,7 +663,7 @@ static inline void msm_ispif_read_irq_status(struct ispif_irq_status *out,
 		__func__, out->ispifIrqStatus0, out->ispifIrqStatus1,
 		out->ispifIrqStatus2);
 	if (out->ispifIrqStatus0 & ISPIF_IRQ_STATUS_MASK ||
-		out->ispifIrqStatus1 & ISPIF_IRQ_STATUS_1_MASK ||
+		out->ispifIrqStatus1 & ISPIF_IRQ_STATUS_1_MASK||
 		out->ispifIrqStatus2 & ISPIF_IRQ_STATUS_2_MASK) {
 		if (out->ispifIrqStatus0 & (0x1 << RESET_DONE_IRQ))
 			complete(&ispif->reset_complete);
@@ -749,6 +766,7 @@ static void msm_ispif_release(struct ispif_device *ispif)
 	CDBG("%s, free_irq\n", __func__);
 	free_irq(ispif->irq->start, ispif);
 	tasklet_kill(&ispif->ispif_tasklet);
+	ispif->ispif_state = ISPIF_POWER_DOWN;
 
 	if (ispif->csid_version < CSID_VERSION_V2) {
 		msm_cam_clk_enable(&ispif->pdev->dev, ispif_8960_clk_info,
@@ -757,7 +775,6 @@ static void msm_ispif_release(struct ispif_device *ispif)
 		msm_cam_clk_enable(&ispif->pdev->dev, ispif_8960_clk_info,
 			ispif->ispif_clk, ARRAY_SIZE(ispif_8960_clk_info), 0);
 	}
-	ispif->ispif_state = ISPIF_POWER_DOWN;
 }
 
 static long msm_ispif_cmd(struct v4l2_subdev *sd, void *arg)
