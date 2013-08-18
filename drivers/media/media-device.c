@@ -210,6 +210,9 @@ static long media_device_setup_link(struct media_device *mdev,
 	return ret;
 }
 
+    /* LGE_CHANGE_S, soojung.lim@lge.com, 2012-10-31, Wise screen / Because of the display engine  */
+int sub_cam_id_for_keep_screen_on = -1;
+    /* LGE_CHANGE_E, soojung.lim@lge.com, 2012-10-31, Wise screen / Because of the display engine  */
 static long media_device_ioctl(struct file *filp, unsigned int cmd,
 			       unsigned long arg)
 {
