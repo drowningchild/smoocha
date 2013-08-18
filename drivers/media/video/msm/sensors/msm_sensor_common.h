@@ -135,9 +135,9 @@ struct msm_sensor_fn_t {
 	int32_t (*sensor_set_fps) (struct msm_sensor_ctrl_t *,
 			struct fps_cfg *);
 	int32_t (*sensor_write_exp_gain) (struct msm_sensor_ctrl_t *,
-			uint16_t, uint32_t, int32_t, uint16_t);
+			uint16_t, uint32_t);
 	int32_t (*sensor_write_snapshot_exp_gain) (struct msm_sensor_ctrl_t *,
-			uint16_t, uint32_t, int32_t, uint16_t);
+			uint16_t, uint32_t);
 	int32_t (*sensor_setting) (struct msm_sensor_ctrl_t *,
 			int update_type, int rt);
 	int32_t (*sensor_csi_setting) (struct msm_sensor_ctrl_t *,
