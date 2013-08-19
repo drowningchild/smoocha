@@ -634,7 +634,7 @@ static void axi_enable_irq(struct vfe_share_ctrl_t *share_ctrl)
 		if (share_ctrl->current_mode & VFE_OUTPUTS_RDI1)
 			irq_mask1 |= VFE_IRQ_STATUS1_RDI1_REG_UPDATE_MASK;
 
-		if (share_ctrl->current_mode & VFE_OUTPUTS_RDI2)
+		if (share_ctrl->current_mode & VFE_OUTPUTS_RDI2) {
 			irq_mask1 |= VFE_IRQ_STATUS1_RDI2_REG_UPDATE_MASK;
         }
 
@@ -4267,49 +4267,6 @@ static void vfe32_process_rdi2_reg_update_irq(
 	}
 }
 
-static void vfe32_process_rdi2_reg_update_irq(
-	struct vfe32_ctrl_type *vfe32_ctrl)
-{
-	pr_err("%s: RDI2\n", __func__);
-	if (atomic_cmpxchg(
-		&vfe32_ctrl->share_ctrl->rdi2_update_ack_pending, 1, 0)
-				== 1) {
-		vfe32_ctrl->share_ctrl->comp_output_mode |=
-			VFE32_OUTPUT_MODE_TERTIARY3;
-		vfe32_send_isp_msg(&vfe32_ctrl->subdev,
-			vfe32_ctrl->share_ctrl->rdi2FrameId,
-			MSG_ID_RDI2_UPDATE_ACK);
-	}
-
-	if ((atomic_read(
-		&vfe32_ctrl->share_ctrl->rdi2_update_ack_pending) == 2)
-		|| (vfe32_ctrl->share_ctrl->rdi2_capture_count == 0)) {
-		axi_disable_wm_irq(vfe32_ctrl->share_ctrl,
-			VFE32_OUTPUT_MODE_TERTIARY3);
-		axi_disable_irq(vfe32_ctrl->share_ctrl, VFE_OUTPUTS_RDI2);
-		atomic_set(&vfe32_ctrl->share_ctrl->rdi2_update_ack_pending, 0);
-		vfe32_send_isp_msg(&vfe32_ctrl->subdev,
-			vfe32_ctrl->share_ctrl->rdi2FrameId,
-			MSG_ID_RDI2_UPDATE_ACK);
-
-		if (vfe32_ctrl->share_ctrl->rdi2_capture_count == 0)
-			vfe32_ctrl->share_ctrl->rdi2_capture_count = -1;
-		if (vfe32_ctrl->share_ctrl->outpath.out4.capture_cnt
-			== 0)
-			vfe32_ctrl->share_ctrl->outpath.out4.capture_cnt = -1;
-		vfe32_ctrl->share_ctrl->comp_output_mode &=
-			~VFE32_OUTPUT_MODE_TERTIARY3;
-		vfe32_ctrl->share_ctrl->operation_mode &=
-			~(VFE_OUTPUTS_RDI2);
-	}
-
-	if (vfe32_ctrl->share_ctrl->rdi2_capture_count > 0) {
-		vfe32_ctrl->share_ctrl->rdi2_capture_count--;
-		if (!vfe32_ctrl->share_ctrl->rdi2_capture_count)
-			axi_stop_rdi2(vfe32_ctrl->share_ctrl);
-	}
-}
-
 static void vfe32_process_reset_irq(
 		struct vfe32_ctrl_type *vfe32_ctrl)
 {
@@ -4902,46 +4859,6 @@ static void vfe32_process_output_path_irq_rdi2(
 	}
 }
 
-static void vfe32_process_output_path_irq_rdi2(
-	struct axi_ctrl_t *axi_ctrl)
-{
-	uint32_t ping_pong;
-	uint32_t ch0_paddr = 0;
-	/* this must be rdi image output. */
-	struct msm_free_buf *free_buf = NULL;
-	/*RDI2*/
-	CDBG("rdi2 out irq\n");
-	if (axi_ctrl->share_ctrl->operation_mode & VFE_OUTPUTS_RDI2) {
-		free_buf = vfe32_check_free_buffer(VFE_MSG_OUTPUT_IRQ,
-			VFE_MSG_OUTPUT_TERTIARY3, axi_ctrl);
-		if (free_buf) {
-			ping_pong = msm_camera_io_r(axi_ctrl->
-				share_ctrl->vfebase +
-				VFE_BUS_PING_PONG_STATUS);
-
-			/* Y channel */
-			ch0_paddr = vfe32_get_ch_addr(ping_pong,
-				axi_ctrl->share_ctrl->vfebase,
-				axi_ctrl->share_ctrl->outpath.out4.ch0);
-			CDBG("%s ch0 = 0x%x\n",
-				__func__, free_buf->ch_paddr[0]);
-
-			/* Y channel */
-			vfe32_put_ch_addr(ping_pong,
-				axi_ctrl->share_ctrl->vfebase,
-				axi_ctrl->share_ctrl->outpath.out4.ch0,
-				free_buf->ch_paddr[0]);
-
-			vfe_send_outmsg(axi_ctrl,
-				MSG_ID_OUTPUT_TERTIARY3, ch0_paddr,
-				0, 0,
-				axi_ctrl->share_ctrl->outpath.out4.inst_handle);
-		} else {
-			axi_ctrl->share_ctrl->outpath.out4.frame_drop_cnt++;
-			pr_err("path_irq irq - no free buffer for rdi2!\n");
-		}
-	}
-}
 static void vfe32_process_output_path_irq_rdi0_and_rdi1(
 	struct axi_ctrl_t *axi_ctrl)
 {
@@ -6792,8 +6709,7 @@ void axi_start(struct msm_cam_media_controller *pmctl,
 		(axi_ctrl->share_ctrl->current_mode &
 		~(VFE_OUTPUTS_RDI0|VFE_OUTPUTS_RDI1|VFE_OUTPUTS_RDI2));
 	CDBG("axi start = %d\n",
-		axi_ctrl->share_ctrl->current_mode);]
-               ~(VFE_OUTPUTS_RDI0|VFE_OUTPUTS_RDI1|VFE_OUTPUTS_RDI2));
+		axi_ctrl->share_ctrl->current_mode);
        pr_err("axi start = %d\n",
                axi_ctrl->share_ctrl->current_mode);
 	rc = axi_config_buffers(axi_ctrl, vfe_params);
@@ -7102,7 +7018,6 @@ void axi_stop(struct msm_cam_media_controller *pmctl,
 	uint32_t vfe_mode =
 	axi_ctrl->share_ctrl->current_mode & ~(VFE_OUTPUTS_RDI0|
 		VFE_OUTPUTS_RDI1|VFE_OUTPUTS_RDI2);
-	int bus_vector_idx = 0;
 
 	switch (vfe_params.cmd_type) {
 	case AXI_CMD_PREVIEW:
