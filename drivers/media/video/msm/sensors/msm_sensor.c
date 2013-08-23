@@ -1924,7 +1924,7 @@ int32_t msm_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 	//LGE_UPDATE_S hojin.ryu@lge.com 20121107	Turn IEF on when getting out from camera
 #ifdef LGIT_IEF_SWITCH
 	if(system_state != SYSTEM_BOOTING){	
-		mipi_lgit_lcd_ief_on();
+		//mipi_lgit_lcd_ief_on();
 	}
 #endif
 	//LGE_UPDATE_E hojin.ryu@lge.com 20121107
