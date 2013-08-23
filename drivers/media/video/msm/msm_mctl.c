@@ -444,7 +444,8 @@ static int msm_mctl_cmd(struct msm_cam_media_controller *p_mctl,
 			rc = -EFAULT;
 		} else {
 			if (msm_sensor_state_check(p_mctl))
-				rc = msm_flash_ctrl(p_mctl->sdata, &flash_info);
+				rc = 0;
+				//rc = msm_flash_ctrl(p_mctl->sdata, &flash_info);
 		}
 		break;
 	}
