@@ -351,10 +351,10 @@ static ssize_t kgamma_b_show(struct device *dev, struct device_attribute *attr,
 {
 	int kgamma[10];
 	int i;
-    
+
 	for (i=0; i<10; i++)
 		kgamma[i] = faux123_power_on_set_1[9].payload[i];
-    
+
 	return sprintf(buf, "%d %d %d %d %d %d %d %d %d %d",
                    kgamma[0], kgamma[1], kgamma[2], kgamma[3],
                    kgamma[4], kgamma[5], kgamma[6], kgamma[7],
@@ -386,11 +386,13 @@ struct syscore_ops panel_syscore_ops = {
 
 static int mipi_lgit_lcd_probe(struct platform_device *pdev)
 {
+	int rc;
+
 	if (pdev->id == 0) {
 		mipi_lgit_pdata = pdev->dev.platform_data;
 		return 0;
 	}
-    
+
     // make a copy of platform data
 	memcpy((void*)faux123_power_on_set_1, (void*)mipi_lgit_pdata->power_on_set_1,
            sizeof(faux123_power_on_set_1));
@@ -399,7 +401,7 @@ static int mipi_lgit_lcd_probe(struct platform_device *pdev)
 
 	skip_init = true;
 	msm_fb_add_device(pdev);
-    
+
     rc = device_create_file(&pdev->dev, &dev_attr_kgamma_r);
     if(rc !=0)
         return -1;
