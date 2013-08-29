@@ -89,10 +89,12 @@ static int mipi_dsi_off(struct platform_device *pdev)
 	}
 
 	/*
-	 * Desctiption: change to DSI_CMD_MODE since it needed to
+	 * Description: change to DSI_CMD_MODE since it needed to
 	 * tx DCS dsiplay off comamnd to panel
 	 */
+#if !defined(CONFIG_FB_MSM_MIPI_DSI_LGIT)
 	mipi_dsi_op_mode_config(DSI_CMD_MODE);
+#endif
 
 	if (mfd->panel_info.type == MIPI_CMD_PANEL) {
 		if (pinfo->lcd.vsync_enable) {
@@ -103,8 +105,9 @@ static int mipi_dsi_off(struct platform_device *pdev)
 			mipi_dsi_set_tear_off(mfd);
 		}
 	}
-
+#if !defined(CONFIG_FB_MSM_MIPI_DSI_LGIT)
 	ret = panel_next_off(pdev);
+#endif
 
 	mipi_dsi_clk_disable();
 
@@ -255,9 +258,28 @@ static int mipi_dsi_on(struct platform_device *pdev)
 	else
 		down(&mfd->dma->mutex);
 
+#if defined(CONFIG_FB_MSM_MIPI_DSI_LGIT)
+  mipi_dsi_op_mode_config(mipi->mode);
+  mdp4_overlay_dsi_video_start();
+  ret = panel_next_on(pdev);
+  if (ret < 0)
+  {
+    if (mdp_rev >= MDP_REV_41)
+      mutex_unlock(&mfd->dma->ov_mutex);
+    else
+      up(&mfd->dma->mutex);
+
+    return ret;
+  } else {
+    ret = 0;
+  }
+#else
+
+	if (mfd->op_enable)
 	ret = panel_next_on(pdev);
 
 	mipi_dsi_op_mode_config(mipi->mode);
+#endif
 
 	if (mfd->panel_info.type == MIPI_CMD_PANEL) {
 		if (pinfo->lcd.vsync_enable) {

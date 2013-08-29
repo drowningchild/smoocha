@@ -2957,6 +2957,15 @@ int mdp4_overlay_mdp_perf_req(struct msm_fb_data_type *mfd,
 	if (ib_quota_total > mdp_max_bw)
 		pr_warn("%s: req ib bw=%llu is larger than max bw=%llu",
 			__func__, ib_quota_total, mdp_max_bw);
+	pr_debug("%s %d: ab_quota_port0=(%llu, %llu) ib_quota_port0=(%llu, %llu)\n",
+		 __func__, __LINE__,
+		 ab_quota_port0, perf_req->mdp_ab_port0_bw,
+		 ib_quota_port0, perf_req->mdp_ib_port0_bw);
+
+	pr_debug("%s %d: ab_quota_port1=(%llu, %llu) ib_quota_port1=(%llu, %llu)\n",
+		 __func__, __LINE__,
+		 ab_quota_port1, perf_req->mdp_ab_port1_bw,
+		 ib_quota_port1, perf_req->mdp_ib_port1_bw);
 
 	pr_debug("%s %d: pid %d cnt %d clk %d ov0_blt %d, ov1_blt %d\n",
 		 __func__, __LINE__, current->pid, cnt,
@@ -3695,7 +3704,7 @@ int mdp4_overlay_commit(struct fb_info *info)
 
 	switch (mfd->panel.type) {
 	case MIPI_CMD_PANEL:
-		mdp4_dsi_cmd_pipe_commit(0, 1);
+		mdp4_dsi_cmd_pipe_commit(0, 0);
 		break;
 	case MIPI_VIDEO_PANEL:
 		mdp4_dsi_video_pipe_commit(0, 1);
