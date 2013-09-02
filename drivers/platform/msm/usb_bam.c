@@ -356,7 +356,7 @@ static int connect_pipe(u8 idx, u32 *usb_pipe_idx)
 		/*
 		 * Enable USB PRIVATE RAM to be used for BAM FIFOs
 		 * HSUSB: Only RAM13 is used for BAM FIFOs
-		 * SSUSB: RAM11, 12, 13 are used for BAM FIFOs
+		 * SSUSB: RAM12, 13 are used for BAM FIFOs
 		 */
 		bam = pipe_connect->bam_type;
 		if (bam < 0) {
@@ -367,7 +367,7 @@ static int connect_pipe(u8 idx, u32 *usb_pipe_idx)
 		if (bam == HSUSB_BAM)
 			ram1_value = 0x4;
 		else
-			ram1_value = 0x7;
+			ram1_value = 0x6;
 
 		pr_debug("Writing 0x%x to QSCRATCH_RAM1\n", ram1_value);
 		writel_relaxed(ram1_value, ctx.qscratch_ram1_reg);
@@ -1275,7 +1275,6 @@ static void usb_bam_finish_resume(struct work_struct *w)
 	spin_unlock(&usb_bam_ipa_handshake_info_lock);
 
 	wait_for_prod_granted(HSUSB_BAM);
-	notify_usb_connected(HSUSB_BAM);
 	if (info.cons_stopped) {
 		ipa_resume_pipes();
 		if (info.start) {
@@ -1292,11 +1291,7 @@ static void usb_bam_finish_resume(struct work_struct *w)
 		info.prod_stopped = false;
 		spin_unlock(&usb_bam_ipa_handshake_info_lock);
 	}
-	if (info.cur_cons_state[HSUSB_BAM] == IPA_RM_RESOURCE_GRANTED) {
-		pr_debug("%s: Notify CONS_GRANTED\n", __func__);
-		ipa_rm_notify_completion(IPA_RM_RESOURCE_GRANTED,
-				 ipa_rm_resource_cons[HSUSB_BAM]);
-	}
+	notify_usb_connected(HSUSB_BAM);
 	mutex_unlock(&info.suspend_resume_mutex);
 	pr_debug("%s: done", __func__);
 }

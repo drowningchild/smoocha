@@ -195,6 +195,7 @@ struct sdhci_host {
 #define SDHCI_PV_ENABLED	(1<<8)	/* Preset value enabled */
 #define SDHCI_SDIO_IRQ_ENABLED	(1<<9)	/* SDIO irq enabled */
 #define SDHCI_HS200_NEEDS_TUNING (1<<10)	/* HS200 needs tuning */
+#define SDHCI_HS400_NEEDS_TUNING (1<<11)	/* HS400 needs tuning */
 
 	unsigned int version;	/* SDHCI spec. version */
 
@@ -259,6 +260,7 @@ struct sdhci_host {
 	bool irq_enabled; /* host irq status flag */
 	bool async_int_supp;  /* async support to rxv int, when clks are off */
 	bool disable_sdio_irq_deferred; /* status of disabling sdio irq */
+	u32 auto_cmd_err_sts;
 	unsigned long private[0] ____cacheline_aligned;
 };
 #endif /* LINUX_MMC_SDHCI_H */

@@ -40,6 +40,9 @@
 #define DRIVER_VERSION_MAJOR   3
 #define DRIVER_VERSION_MINOR   1
 
+/* Number of times to try hard reset */
+#define NUM_TIMES_RESET_RETRY 5
+
 /* Adreno MH arbiter config*/
 #define ADRENO_CFG_MHARB \
 	(0x10 \
@@ -72,6 +75,8 @@
 	 | (MMU_CONFIG << MH_MMU_CONFIG__TC_R_CLNT_BEHAVIOR__SHIFT)	\
 	 | (MMU_CONFIG << MH_MMU_CONFIG__PA_W_CLNT_BEHAVIOR__SHIFT))
 
+#define KGSL_LOG_LEVEL_DEFAULT 3
+
 static const struct kgsl_functable adreno_functable;
 
 static struct adreno_device device_3d0 = {
@@ -101,6 +106,12 @@ static struct adreno_device device_3d0 = {
 		.iomemname = KGSL_3D0_REG_MEMORY,
 		.shadermemname = KGSL_3D0_SHADER_MEMORY,
 		.ftbl = &adreno_functable,
+		.cmd_log = KGSL_LOG_LEVEL_DEFAULT,
+		.ctxt_log = KGSL_LOG_LEVEL_DEFAULT,
+		.drv_log = KGSL_LOG_LEVEL_DEFAULT,
+		.mem_log = KGSL_LOG_LEVEL_DEFAULT,
+		.pwr_log = KGSL_LOG_LEVEL_DEFAULT,
+		.pm_dump_enable = 0,
 	},
 	.gmem_base = 0,
 	.gmem_size = SZ_256K,
@@ -200,6 +211,9 @@ static const struct {
 	{ ADRENO_REV_A305C, 3, 0, 5, 0x20,
 		"a300_pm4.fw", "a300_pfp.fw", &adreno_a3xx_gpudev,
 		512, 0, 2, SZ_128K, 0x3FF037, 0x3FF016 },
+	{ ADRENO_REV_A420, 4, 2, 0, ANY_ID,
+		"a420_pm4.fw", "a420_pfp.fw", &adreno_a4xx_gpudev,
+		512, 0, 2, (SZ_1M + SZ_512K), NO_VER, NO_VER },
 };
 
 /**
@@ -236,10 +250,8 @@ static void adreno_perfcounter_start(struct adreno_device *adreno_dev)
 	struct adreno_perfcount_group *group;
 	unsigned int i, j;
 
-	/* perfcounter start does nothing on a2xx */
-	if (adreno_is_a2xx(adreno_dev))
+	if (NULL == counters)
 		return;
-
 	/* group id iter */
 	for (i = 0; i < counters->group_count; i++) {
 		group = &(counters->groups[i]);
@@ -319,8 +331,7 @@ int adreno_perfcounter_read_group(struct adreno_device *adreno_dev,
 			if (group->regs[i].countable == list[j].countable) {
 				list[j].value =
 					adreno_dev->gpudev->perfcounter_read(
-					adreno_dev, list[j].groupid,
-					i, group->regs[i].offset);
+					adreno_dev, list[j].groupid, i);
 				break;
 			}
 		}
@@ -1498,7 +1509,8 @@ static int
 adreno_ocmem_gmem_malloc(struct adreno_device *adreno_dev)
 {
 	if (!(adreno_is_a330(adreno_dev) ||
-		adreno_is_a305b(adreno_dev)))
+		adreno_is_a305b(adreno_dev) ||
+		adreno_is_a4xx(adreno_dev)))
 		return 0;
 
 	/* OCMEM is only needed once, do not support consective allocation */
@@ -1520,7 +1532,8 @@ static void
 adreno_ocmem_gmem_free(struct adreno_device *adreno_dev)
 {
 	if (!(adreno_is_a330(adreno_dev) ||
-		adreno_is_a305b(adreno_dev)))
+		adreno_is_a305b(adreno_dev) ||
+		adreno_is_a4xx(adreno_dev)))
 		return;
 
 	if (adreno_dev->ocmem_hdl == NULL)
@@ -1773,11 +1786,9 @@ error_mmu_off:
 	kgsl_mmu_stop(&device->mmu);
 
 error_clk_off:
-	if (KGSL_STATE_DUMP_AND_FT != device->state) {
-		kgsl_pwrctrl_disable(device);
-		/* set the state back to original state */
-		kgsl_pwrctrl_set_state(device, state);
-	}
+	kgsl_pwrctrl_disable(device);
+	/* set the state back to original state */
+	kgsl_pwrctrl_set_state(device, state);
 
 	return status;
 }
@@ -1822,6 +1833,7 @@ int adreno_reset(struct kgsl_device *device)
 {
 	int ret = -EINVAL;
 	struct kgsl_mmu *mmu = &device->mmu;
+	int i = 0;
 
 	/* Try soft reset first, for non mmu fault case only */
 	if (!atomic_read(&mmu->fault)) {
@@ -1830,16 +1842,28 @@ int adreno_reset(struct kgsl_device *device)
 			KGSL_DEV_ERR_ONCE(device, "Device soft reset failed\n");
 	}
 	if (ret) {
-		/* If soft reset failed or skipped, then pull the power */
-		ret = adreno_stop(device);
-		if (ret)
-			return ret;
+		for (i = 0; i < NUM_TIMES_RESET_RETRY; i++) {
+			/* If soft reset failed/skipped, then pull the power */
+			ret = adreno_stop(device);
+			if (ret) {
+				msleep(20);
+				continue;
+			}
 
-		ret = adreno_start(device);
+			ret = adreno_start(device);
 
-		if (ret)
-			return ret;
+			if (ret) {
+				msleep(20);
+				continue;
+			}
+			break;
+		}
 	}
+	if (ret)
+		return ret;
+
+	if (0 != i)
+		KGSL_DRV_WARN(device, "Device hard reset tried %d tries\n", i);
 
 	/*
 	 * If active_cnt is non-zero then the system was active before
@@ -2275,7 +2299,7 @@ static bool adreno_hw_isidle(struct kgsl_device *device)
 	if (adreno_is_a2xx(adreno_dev)) {
 		if (reg_rbbm_status == 0x110)
 			return true;
-	} else if (adreno_is_a3xx(adreno_dev)) {
+	} else if (adreno_is_a3xx(adreno_dev) || adreno_is_a4xx(adreno_dev)) {
 		if (!(reg_rbbm_status & 0x80000000))
 			return true;
 	}
@@ -2392,7 +2416,7 @@ int adreno_idle(struct kgsl_device *device)
 
 	BUG_ON(!mutex_is_locked(&device->mutex));
 
-	if (adreno_is_a3xx(adreno_dev))
+	if (adreno_is_a3xx(adreno_dev) || adreno_is_a4xx(adreno_dev))
 		kgsl_cffdump_regpoll(device,
 			adreno_getreg(adreno_dev, ADRENO_REG_RBBM_STATUS) << 2,
 			0x00000000, 0x80000000);
@@ -2488,15 +2512,30 @@ struct kgsl_memdesc *adreno_find_ctxtmem(struct kgsl_device *device,
 	return desc;
 }
 
+/*
+ * adreno_find_region() - Find corresponding allocation for a given address
+ * @device: Device on which address operates
+ * @pt_base: The pagetable in which address is mapped
+ * @gpuaddr: The gpu address
+ * @size: Size in bytes of the address
+ * @entry: If the allocation is part of user space allocation then the mem
+ * entry is returned in this parameter. Caller is supposed to decrement
+ * refcount on this entry after its done using it.
+ *
+ * Finds an allocation descriptor for a given gpu address range
+ *
+ * Returns the descriptor on success else NULL
+ */
 struct kgsl_memdesc *adreno_find_region(struct kgsl_device *device,
 						phys_addr_t pt_base,
 						unsigned int gpuaddr,
-						unsigned int size)
+						unsigned int size,
+						struct kgsl_mem_entry **entry)
 {
-	struct kgsl_mem_entry *entry;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct adreno_ringbuffer *ringbuffer = &adreno_dev->ringbuffer;
 
+	*entry = NULL;
 	if (kgsl_gpuaddr_in_memdesc(&ringbuffer->buffer_desc, gpuaddr, size))
 		return &ringbuffer->buffer_desc;
 
@@ -2513,20 +2552,33 @@ struct kgsl_memdesc *adreno_find_region(struct kgsl_device *device,
 					size))
 		return &device->mmu.setstate_memory;
 
-	entry = kgsl_get_mem_entry(device, pt_base, gpuaddr, size);
+	*entry = kgsl_get_mem_entry(device, pt_base, gpuaddr, size);
 
-	if (entry)
-		return &entry->memdesc;
+	if (*entry)
+		return &((*entry)->memdesc);
 
 	return adreno_find_ctxtmem(device, pt_base, gpuaddr, size);
 }
 
+/*
+ * adreno_convertaddr() - Convert a gpu address to kernel mapped address
+ * @device: Device on which the address operates
+ * @pt_base: The pagetable in which address is mapped
+ * @gpuaddr: The start address
+ * @size: The length of address range
+ * @entry: If the allocation is part of user space allocation then the mem
+ * entry is returned in this parameter. Caller is supposed to decrement
+ * refcount on this entry after its done using it.
+ *
+ * Returns the converted host pointer on success else NULL
+ */
 uint8_t *adreno_convertaddr(struct kgsl_device *device, phys_addr_t pt_base,
-			    unsigned int gpuaddr, unsigned int size)
+			    unsigned int gpuaddr, unsigned int size,
+				struct kgsl_mem_entry **entry)
 {
 	struct kgsl_memdesc *memdesc;
 
-	memdesc = adreno_find_region(device, pt_base, gpuaddr, size);
+	memdesc = adreno_find_region(device, pt_base, gpuaddr, size, entry);
 
 	return memdesc ? kgsl_gpuaddr_to_vaddr(memdesc, gpuaddr) : NULL;
 }
@@ -2627,7 +2679,7 @@ static int adreno_waittimestamp(struct kgsl_device *device,
 		/* If they are doing then complain once */
 		dev_WARN_ONCE(device->dev, 1,
 			"IOCTL_KGSL_DEVICE_WAITTIMESTAMP is deprecated\n");
-		return -EINVAL;
+		return -ENOTTY;
 	}
 
 	/* Return -EINVAL if the context has been detached */

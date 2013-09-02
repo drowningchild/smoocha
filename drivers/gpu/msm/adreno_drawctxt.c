@@ -571,6 +571,10 @@ int adreno_drawctxt_detach(struct kgsl_context *context)
 	kgsl_sharedmem_free(&drawctxt->gpustate);
 	kgsl_sharedmem_free(&drawctxt->context_gmem_shadow.gmemshadow);
 
+	/* wake threads waiting to submit commands from this context */
+	wake_up_interruptible_all(&drawctxt->waiting);
+	wake_up_interruptible_all(&drawctxt->wq);
+
 	return ret;
 }
 
@@ -645,14 +649,16 @@ int adreno_drawctxt_switch(struct adreno_device *adreno_dev,
 		drawctxt, flags);
 
 	/* Save the old context */
-	ret = adreno_dev->gpudev->ctxt_save(adreno_dev,
-		adreno_dev->drawctxt_active);
+	if (adreno_dev->gpudev->ctxt_save) {
+		ret = adreno_dev->gpudev->ctxt_save(adreno_dev,
+			adreno_dev->drawctxt_active);
 
-	if (ret) {
-		KGSL_DRV_ERR(device,
-			"Error in GPU context %d save: %d\n",
-			adreno_dev->drawctxt_active->base.id, ret);
-		return ret;
+		if (ret) {
+			KGSL_DRV_ERR(device,
+				"Error in GPU context %d save: %d\n",
+				adreno_dev->drawctxt_active->base.id, ret);
+			return ret;
+		}
 	}
 
 	/* Put the old instance of the active drawctxt */
@@ -672,7 +678,7 @@ int adreno_drawctxt_switch(struct adreno_device *adreno_dev,
 	if (ret) {
 		KGSL_DRV_ERR(device,
 			"Error in GPU context %d restore: %d\n",
-			drawctxt->base.id, ret);
+			drawctxt ? drawctxt->base.id : 0, ret);
 		return ret;
 	}
 

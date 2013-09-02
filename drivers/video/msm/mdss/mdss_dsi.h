@@ -344,6 +344,7 @@ struct mdss_dsi_ctrl_pdata {
 	int pwm_pmic_gpio;
 	int pwm_lpg_chan;
 	int bklt_max;
+	int new_fps;
 	struct pwm_device *pwm_bl;
 	struct dsi_drv_cm_data shared_pdata;
 	u32 pclk_rate;
@@ -370,8 +371,9 @@ struct mdss_dsi_ctrl_pdata {
 	struct dsi_buf rx_buf;
 };
 
-int dsi_panel_device_register(struct platform_device *pdev,
-			      struct mdss_panel_common_pdata *panel_data);
+int dsi_panel_device_register(struct device_node *pan_node,
+			      struct mdss_panel_common_pdata *panel_data,
+			      bool cmd_cfg_cont_splash);
 
 char *mdss_dsi_buf_reserve_hdr(struct dsi_buf *dp, int hlen);
 char *mdss_dsi_buf_init(struct dsi_buf *dp);
@@ -406,8 +408,8 @@ irqreturn_t mdss_dsi_isr(int irq, void *ptr);
 void mdss_dsi_irq_handler_config(struct mdss_dsi_ctrl_pdata *ctrl_pdata);
 
 void mipi_set_tx_power_mode(int mode, struct mdss_panel_data *pdata);
-int mdss_dsi_clk_div_config(u8 bpp, u8 lanes,
-			    u32 *expected_dsi_pclk);
+int mdss_dsi_clk_div_config(struct mdss_panel_info *panel_info,
+			    int frame_rate);
 int mdss_dsi_clk_init(struct platform_device *pdev,
 		      struct mdss_dsi_ctrl_pdata *ctrl_pdata);
 void mdss_dsi_clk_deinit(struct mdss_dsi_ctrl_pdata *ctrl_pdata);
@@ -429,4 +431,6 @@ int mdss_dsi_cmdlist_put(struct mdss_dsi_ctrl_pdata *ctrl,
 struct dcs_cmd_req *mdss_dsi_cmdlist_get(struct mdss_dsi_ctrl_pdata *ctrl);
 void mdss_dsi_cmdlist_kickoff(int intf);
 
+int mdss_dsi_panel_init(struct device_node *node,
+		struct mdss_panel_common_pdata *vendor_pdata);
 #endif /* MDSS_DSI_H */

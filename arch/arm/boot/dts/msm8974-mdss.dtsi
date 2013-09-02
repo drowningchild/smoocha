@@ -86,6 +86,7 @@
 		vddio-supply = <&pm8941_l12>;
 		vdda-supply = <&pm8941_l2>;
 		qcom,mdss-fb-map = <&mdss_fb0>;
+		qcom,mdss-mdp = <&mdss_mdp>;
 		qcom,platform-reset-gpio = <&pm8941_gpios 19 1>;
 		qcom,platform-enable-gpio = <&msmgpio 58 1>;
 		qcom,platform-reset-sequence = <1 20 0 200 1 20 2>;
@@ -141,6 +142,7 @@
 		vddio-supply = <&pm8941_l12>;
 		vdda-supply = <&pm8941_l2>;
 		qcom,mdss-fb-map = <&mdss_fb0>;
+		qcom,mdss-mdp = <&mdss_mdp>;
 	};
 
 	mdss_hdmi_tx: qcom,hdmi_tx@fd922100 {
@@ -158,7 +160,7 @@
 		qcom,supply-names = "hpd-gdsc", "hpd-5v", "core-vdda", "core-vcc";
 		qcom,min-voltage-level = <0 0 1800000 1800000>;
 		qcom,max-voltage-level = <0 0 1800000 1800000>;
-		qcom,enable-load = <0 0 1800000 0>;
+		qcom,enable-load = <0 0 300000 0>;
 		qcom,disable-load = <0 0 0 0>;
 
 		qcom,hdmi-tx-cec = <&msmgpio 31 0>;
@@ -187,8 +189,9 @@
 		gpio-panel-en = <&msmgpio 58 0>;
 		qcom,panel-lpg-channel = <7>; /* LPG Channel 8 */
 		qcom,panel-pwm-period = <53>;
-		status = "disable";
 		qcom,mdss-fb-map = <&mdss_fb0>;
 		gpio-panel-hpd = <&msmgpio 102 0>;
 	};
 };
+
+/include/ "msm8974-mdss-panels.dtsi"

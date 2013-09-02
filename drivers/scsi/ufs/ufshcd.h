@@ -52,6 +52,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/clk.h>
 #include <linux/completion.h>
+#include <linux/regulator/consumer.h>
 
 #include <asm/irq.h>
 #include <asm/byteorder.h>
@@ -67,6 +68,8 @@
 
 #define UFSHCD "ufshcd"
 #define UFSHCD_DRIVER_VERSION "0.2"
+
+struct ufs_hba;
 
 enum dev_cmd_type {
 	DEV_CMD_TYPE_NOP		= 0x0,
@@ -166,6 +169,46 @@ struct debugfs_files {
 #endif
 
 /**
+ * struct ufs_clk_info - UFS clock related info
+ * @list: list headed by hba->clk_list_head
+ * @clk: clock node
+ * @name: clock name
+ * @max_freq: maximum frequency supported by the clock
+ * @enabled: variable to check against multiple enable/disable
+ */
+struct ufs_clk_info {
+	struct list_head list;
+	struct clk *clk;
+	const char *name;
+	u32 max_freq;
+	bool enabled;
+};
+
+#define PRE_CHANGE      0
+#define POST_CHANGE     1
+/**
+ * struct ufs_hba_variant_ops - variant specific callbacks
+ * @name: variant name
+ * @init: called when the driver is initialized
+ * @exit: called to cleanup everything done in init
+ * @setup_clocks: called before touching any of the controller registers
+ * @setup_regulators: called before accessing the host controller
+ * @hce_enable_notify: called before and after HCE enable bit is set to allow
+ *                     variant specific Uni-Pro initialization.
+ * @link_startup_notify: called before and after Link startup is carried out
+ *                       to allow variant specific Uni-Pro initialization.
+ */
+struct ufs_hba_variant_ops {
+	const char *name;
+	int	(*init)(struct ufs_hba *);
+	void    (*exit)(struct ufs_hba *);
+	int     (*setup_clocks)(struct ufs_hba *, bool);
+	int     (*setup_regulators)(struct ufs_hba *, bool);
+	int     (*hce_enable_notify)(struct ufs_hba *, bool);
+	int     (*link_startup_notify)(struct ufs_hba *, bool);
+};
+
+/**
  * struct ufs_hba - per adapter private structure
  * @mmio_base: UFSHCI base register address
  * @ucdl_base_addr: UFS Command Descriptor base address
@@ -184,6 +227,8 @@ struct debugfs_files {
  * @nutrs: Transfer Request Queue depth supported by controller
  * @nutmrs: Task Management Queue depth supported by controller
  * @ufs_version: UFS Version to which controller complies
+ * @vops: pointer to variant specific operations
+ * @priv: pointer to variant specific private data
  * @irq: Irq number of the controller
  * @active_uic_cmd: handle of active UIC command
  * @uic_cmd_mutex: mutex for uic command
@@ -191,6 +236,7 @@ struct debugfs_files {
  * @tm_tag_wq: wait queue for free task management slots
  * @tm_condition: condition variable for task management
  * @tm_slots_in_use: bit map of task management request slots in use
+ * @pwr_done: completion for power mode change
  * @ufshcd_state: UFSHCD states
  * @eh_flags: Error handling flags
  * @intr_mask: Interrupt Mask Bits
@@ -203,6 +249,8 @@ struct debugfs_files {
  * @saved_uic_err: sticky UIC error mask
  * @dev_cmd: ufs device management command information
  * @auto_bkops_enabled: to track whether bkops is enabled in device
+ * @vreg_info: UFS device voltage regulator information
+ * @clk_list_head: UFS host controller clocks list node head
  * @ufs_stats: ufshcd statistics to be used via debugfs
  * @debugfs_files: debugfs files associated with the ufs stats
  */
@@ -232,6 +280,8 @@ struct ufs_hba {
 	int nutrs;
 	int nutmrs;
 	u32 ufs_version;
+	struct ufs_hba_variant_ops *vops;
+	void *priv;
 	unsigned int irq;
 
 	struct uic_command *active_uic_cmd;
@@ -241,6 +291,8 @@ struct ufs_hba {
 	wait_queue_head_t tm_tag_wq;
 	unsigned long tm_condition;
 	unsigned long tm_slots_in_use;
+
+	struct completion *pwr_done;
 
 	u32 ufshcd_state;
 	u32 eh_flags;
@@ -261,6 +313,8 @@ struct ufs_hba {
 	struct ufs_dev_cmd dev_cmd;
 
 	bool auto_bkops_enabled;
+	struct ufs_vreg_info vreg_info;
+	struct list_head clk_list_head;
 
 #ifdef CONFIG_DEBUG_FS
 	struct ufs_stats ufs_stats;
@@ -273,8 +327,25 @@ struct ufs_hba {
 #define ufshcd_readl(hba, reg)	\
 	readl((hba)->mmio_base + (reg))
 
-int ufshcd_init(struct device *, struct ufs_hba ** , void __iomem * ,
-			unsigned int);
+/**
+ * ufshcd_rmwl - read modify write into a register
+ * @hba - per adapter instance
+ * @mask - mask to apply on read value
+ * @val - actual value to write
+ * @reg - register address
+ */
+static inline void ufshcd_rmwl(struct ufs_hba *hba, u32 mask, u32 val, u32 reg)
+{
+	u32 tmp;
+
+	tmp = ufshcd_readl(hba, reg);
+	tmp &= ~mask;
+	tmp |= (val & mask);
+	ufshcd_writel(hba, tmp, reg);
+}
+
+int ufshcd_alloc_host(struct device *, struct ufs_hba **);
+int ufshcd_init(struct ufs_hba * , void __iomem * , unsigned int);
 void ufshcd_remove(struct ufs_hba *);
 
 /**
@@ -295,4 +366,63 @@ static inline void check_upiu_size(void)
 extern int ufshcd_runtime_suspend(struct ufs_hba *hba);
 extern int ufshcd_runtime_resume(struct ufs_hba *hba);
 extern int ufshcd_runtime_idle(struct ufs_hba *hba);
+extern int ufshcd_dme_set_attr(struct ufs_hba *hba, u32 attr_sel,
+			       u8 attr_set, u32 mib_val, u8 peer);
+extern int ufshcd_dme_get_attr(struct ufs_hba *hba, u32 attr_sel,
+			       u32 *mib_val, u8 peer);
+
+/* UIC command interfaces for DME primitives */
+#define DME_LOCAL	0
+#define DME_PEER	1
+#define ATTR_SET_NOR	0	/* NORMAL */
+#define ATTR_SET_ST	1	/* STATIC */
+
+static inline int ufshcd_dme_set(struct ufs_hba *hba, u32 attr_sel,
+				 u32 mib_val)
+{
+	return ufshcd_dme_set_attr(hba, attr_sel, ATTR_SET_NOR,
+				   mib_val, DME_LOCAL);
+}
+
+static inline int ufshcd_dme_st_set(struct ufs_hba *hba, u32 attr_sel,
+				    u32 mib_val)
+{
+	return ufshcd_dme_set_attr(hba, attr_sel, ATTR_SET_ST,
+				   mib_val, DME_LOCAL);
+}
+
+static inline int ufshcd_dme_peer_set(struct ufs_hba *hba, u32 attr_sel,
+				      u32 mib_val)
+{
+	return ufshcd_dme_set_attr(hba, attr_sel, ATTR_SET_NOR,
+				   mib_val, DME_PEER);
+}
+
+static inline int ufshcd_dme_peer_st_set(struct ufs_hba *hba, u32 attr_sel,
+					 u32 mib_val)
+{
+	return ufshcd_dme_set_attr(hba, attr_sel, ATTR_SET_ST,
+				   mib_val, DME_PEER);
+}
+
+static inline int ufshcd_dme_get(struct ufs_hba *hba,
+				 u32 attr_sel, u32 *mib_val)
+{
+	return ufshcd_dme_get_attr(hba, attr_sel, mib_val, DME_LOCAL);
+}
+
+static inline int ufshcd_dme_peer_get(struct ufs_hba *hba,
+				      u32 attr_sel, u32 *mib_val)
+{
+	return ufshcd_dme_get_attr(hba, attr_sel, mib_val, DME_PEER);
+}
+
+/* variant specific ops structures */
+#ifdef CONFIG_SCSI_UFS_MSM
+extern const struct ufs_hba_variant_ops ufs_hba_msm_vops;
+#else
+static const struct ufs_hba_variant_ops ufs_hba_msm_vops = {
+	.name = "msm",
+};
+#endif
 #endif /* End of Header */

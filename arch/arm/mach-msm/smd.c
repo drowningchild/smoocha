@@ -144,15 +144,24 @@ enum {
 	SMSM_APPS_DEM_I = 3,
 };
 
-int msm_smd_debug_mask = MSM_SMx_POWER_INFO;
+int msm_smd_debug_mask = MSM_SMD_POWER_INFO | MSM_SMD_INFO |
+							MSM_SMSM_POWER_INFO;
 module_param_named(debug_mask, msm_smd_debug_mask,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
 void *smd_log_ctx;
+void *smsm_log_ctx;
 #define NUM_LOG_PAGES 4
 
-#define IPC_LOG(level, x...) do { \
+#define IPC_LOG_SMD(level, x...) do { \
 	if (smd_log_ctx) \
 		ipc_log_string(smd_log_ctx, x); \
+	else \
+		printk(level x); \
+	} while (0)
+
+#define IPC_LOG_SMSM(level, x...) do { \
+	if (smsm_log_ctx) \
+		ipc_log_string(smsm_log_ctx, x); \
 	else \
 		printk(level x); \
 	} while (0)
@@ -160,33 +169,40 @@ void *smd_log_ctx;
 #if defined(CONFIG_MSM_SMD_DEBUG)
 #define SMD_DBG(x...) do {				\
 		if (msm_smd_debug_mask & MSM_SMD_DEBUG) \
-			IPC_LOG(KERN_DEBUG, x);		\
+			IPC_LOG_SMD(KERN_DEBUG, x);	\
 	} while (0)
 
 #define SMSM_DBG(x...) do {					\
 		if (msm_smd_debug_mask & MSM_SMSM_DEBUG)	\
-			IPC_LOG(KERN_DEBUG, x);		\
+			IPC_LOG_SMSM(KERN_DEBUG, x);		\
 	} while (0)
 
 #define SMD_INFO(x...) do {			 	\
 		if (msm_smd_debug_mask & MSM_SMD_INFO)	\
-			IPC_LOG(KERN_INFO, x);		\
+			IPC_LOG_SMD(KERN_INFO, x);	\
 	} while (0)
 
 #define SMSM_INFO(x...) do {				\
 		if (msm_smd_debug_mask & MSM_SMSM_INFO) \
-			IPC_LOG(KERN_INFO, x);		\
+			IPC_LOG_SMSM(KERN_INFO, x);	\
 	} while (0)
-#define SMx_POWER_INFO(x...) do {				\
-		if (msm_smd_debug_mask & MSM_SMx_POWER_INFO) \
-			IPC_LOG(KERN_INFO, x);		\
+
+#define SMD_POWER_INFO(x...) do {				\
+		if (msm_smd_debug_mask & MSM_SMD_POWER_INFO)	\
+			IPC_LOG_SMD(KERN_INFO, x);		\
+	} while (0)
+
+#define SMSM_POWER_INFO(x...) do {				\
+		if (msm_smd_debug_mask & MSM_SMSM_POWER_INFO)	\
+			IPC_LOG_SMSM(KERN_INFO, x);		\
 	} while (0)
 #else
 #define SMD_DBG(x...) do { } while (0)
 #define SMSM_DBG(x...) do { } while (0)
 #define SMD_INFO(x...) do { } while (0)
 #define SMSM_INFO(x...) do { } while (0)
-#define SMx_POWER_INFO(x...) do { } while (0)
+#define SMD_POWER_INFO(x...) do { } while (0)
+#define SMSM_POWER_INFO(x...) do { } while (0)
 #endif
 
 /**
@@ -223,6 +239,8 @@ static struct smsm_state_info *smsm_states;
 static int smd_stream_write_avail(struct smd_channel *ch);
 static int smd_stream_read_avail(struct smd_channel *ch);
 
+static bool pid_is_on_edge(uint32_t edge_num, unsigned pid);
+
 static inline void smd_write_intr(unsigned int val,
 				const void __iomem *addr)
 {
@@ -237,9 +255,9 @@ static inline void log_notify(uint32_t subsystem, smd_channel_t *ch)
 	(void) subsys;
 
 	if (!ch)
-		SMx_POWER_INFO("Apps->%s\n", subsys);
+		SMD_POWER_INFO("Apps->%s\n", subsys);
 	else
-		SMx_POWER_INFO(
+		SMD_POWER_INFO(
 			"Apps->%s ch%d '%s': tx%d/rx%d %dr/%dw : %dr/%dw\n",
 			subsys, ch->n, ch->name,
 			ch->fifo_size -
@@ -322,7 +340,7 @@ static inline void notify_modem_smsm(void)
 	static const struct interrupt_config_item *intr
 		= &private_intr_config[SMD_MODEM].smsm;
 
-	SMx_POWER_INFO("SMSM Apps->%s", "MODEM");
+	SMSM_POWER_INFO("SMSM Apps->%s", "MODEM");
 
 	if (intr->out_base) {
 		++interrupt_stats[SMD_MODEM].smsm_out_config_count;
@@ -336,7 +354,7 @@ static inline void notify_dsp_smsm(void)
 	static const struct interrupt_config_item *intr
 		= &private_intr_config[SMD_Q6].smsm;
 
-	SMx_POWER_INFO("SMSM Apps->%s", "ADSP");
+	SMSM_POWER_INFO("SMSM Apps->%s", "ADSP");
 
 	if (intr->out_base) {
 		++interrupt_stats[SMD_Q6].smsm_out_config_count;
@@ -350,7 +368,7 @@ static inline void notify_dsps_smsm(void)
 	static const struct interrupt_config_item *intr
 		= &private_intr_config[SMD_DSPS].smsm;
 
-	SMx_POWER_INFO("SMSM Apps->%s", "DSPS");
+	SMSM_POWER_INFO("SMSM Apps->%s", "DSPS");
 
 	if (intr->out_base) {
 		++interrupt_stats[SMD_DSPS].smsm_out_config_count;
@@ -364,7 +382,7 @@ static inline void notify_wcnss_smsm(void)
 	static const struct interrupt_config_item *intr
 		= &private_intr_config[SMD_WCNSS].smsm;
 
-	SMx_POWER_INFO("SMSM Apps->%s", "WCNSS");
+	SMSM_POWER_INFO("SMSM Apps->%s", "WCNSS");
 
 	if (intr->out_base) {
 		++interrupt_stats[SMD_WCNSS].smsm_out_config_count;
@@ -615,8 +633,7 @@ static void scan_alloc_table(struct smd_alloc_elm *shared,
 		 * involved
 		 */
 		type = SMD_CHANNEL_TYPE(shared[n].type);
-		if (type >= ARRAY_SIZE(edge_to_pids) ||
-				edge_to_pids[type].local_pid != SMD_APPS)
+		if (!pid_is_on_edge(type, SMD_APPS))
 			continue;
 		if (!shared[n].ref_count)
 			continue;
@@ -674,58 +691,33 @@ static void smd_channel_probe_worker(struct work_struct *work)
 }
 
 /**
- * Lookup processor ID and determine if it belongs to the proved edge
- * type.
+ * get_remote_ch() - gathers remote channel info
  *
  * @shared2:   Pointer to v2 shared channel structure
  * @type:      Edge type
  * @pid:       Processor ID of processor on edge
- * @local_ch:  Channel that belongs to processor @pid
- * @remote_ch: Other side of edge contained @pid
+ * @remote_ch:  Channel that belongs to processor @pid
  * @is_word_access_ch: Bool, is this a word aligned access channel
  *
- * Returns 0 for not on edge, 1 for found on edge
+ * @returns:		0 on success, error code on failure
  */
-static int pid_is_on_edge(void *shared2,
+static int get_remote_ch(void *shared2,
 		uint32_t type, uint32_t pid,
-		void **local_ch,
 		void **remote_ch,
 		int is_word_access_ch
 		)
 {
-	int ret = 0;
-	struct edge_to_pid *edge;
-	void *ch0;
-	void *ch1;
+	if (!remote_ch || !shared2 || !pid_is_on_edge(type, pid) ||
+				!pid_is_on_edge(type, SMD_APPS))
+		return -EINVAL;
 
-	*local_ch = 0;
-	*remote_ch = 0;
+	if (is_word_access_ch)
+		*remote_ch =
+			&((struct smd_shared_v2_word_access *)(shared2))->ch1;
+	else
+		*remote_ch = &((struct smd_shared_v2 *)(shared2))->ch1;
 
-	if (!shared2 || (type >= ARRAY_SIZE(edge_to_pids)))
-		return 0;
-
-	if (is_word_access_ch) {
-		ch0 = &((struct smd_shared_v2_word_access *)(shared2))->ch0;
-		ch1 = &((struct smd_shared_v2_word_access *)(shared2))->ch1;
-	} else {
-		ch0 = &((struct smd_shared_v2 *)(shared2))->ch0;
-		ch1 = &((struct smd_shared_v2 *)(shared2))->ch1;
-	}
-
-	edge = &edge_to_pids[type];
-	if (edge->local_pid != edge->remote_pid) {
-		if (pid == edge->local_pid) {
-			*local_ch = ch0;
-			*remote_ch = ch1;
-			ret = 1;
-		} else if (pid == edge->remote_pid) {
-			*local_ch = ch1;
-			*remote_ch = ch0;
-			ret = 1;
-		}
-	}
-
-	return ret;
+	return 0;
 }
 
 /**
@@ -825,15 +817,27 @@ static void smd_reset_edge(void *void_ch, unsigned new_state,
 	}
 }
 
-static void smd_channel_reset_state(struct smd_alloc_elm *shared,
+static void smd_channel_reset_state(struct smd_alloc_elm *shared, int table_id,
 		unsigned new_state, unsigned pid)
 {
 	unsigned n;
 	void *shared2;
 	uint32_t type;
-	void *local_ch;
 	void *remote_ch;
 	int is_word_access;
+	unsigned base_id;
+
+	switch (table_id) {
+	case PRI_ALLOC_TBL:
+		base_id = SMEM_SMD_BASE_ID;
+		break;
+	case SEC_ALLOC_TBL:
+		base_id = SMEM_SMD_BASE_ID_2;
+		break;
+	default:
+		SMD_INFO("%s: invalid table_id:%d\n", __func__, table_id);
+		return;
+	}
 
 	for (n = 0; n < SMD_CHANNELS; n++) {
 		if (!shared[n].ref_count)
@@ -844,42 +848,55 @@ static void smd_channel_reset_state(struct smd_alloc_elm *shared,
 		type = SMD_CHANNEL_TYPE(shared[n].type);
 		is_word_access = is_word_access_ch(type);
 		if (is_word_access)
-			shared2 = smem_alloc(SMEM_SMD_BASE_ID + n,
+			shared2 = smem_alloc(base_id + n,
 				sizeof(struct smd_shared_v2_word_access));
 		else
-			shared2 = smem_alloc(SMEM_SMD_BASE_ID + n,
+			shared2 = smem_alloc(base_id + n,
 				sizeof(struct smd_shared_v2));
 		if (!shared2)
 			continue;
 
-		if (pid_is_on_edge(shared2, type, pid, &local_ch, &remote_ch,
-							is_word_access))
-			smd_reset_edge(local_ch, new_state, is_word_access);
-
-		/*
-		 * ModemFW is in the same subsystem as ModemSW, but has
-		 * separate SMD edges that need to be reset.
-		 */
-		if (pid == SMSM_MODEM &&
-				pid_is_on_edge(shared2, type, SMD_MODEM_Q6_FW,
-				 &local_ch, &remote_ch, is_word_access))
-			smd_reset_edge(local_ch, new_state, is_word_access);
+		if (!get_remote_ch(shared2, type, pid,
+					&remote_ch, is_word_access))
+			smd_reset_edge(remote_ch, new_state, is_word_access);
 	}
 }
 
+/**
+ * pid_is_on_edge() - checks to see if the processor with id pid is on the
+ * edge specified by edge_num
+ *
+ * @edge_num:		the number of the edge which is being tested
+ * @pid:		the id of the processor being tested
+ *
+ * @returns:		true if on edge, false otherwise
+ */
+static bool pid_is_on_edge(uint32_t edge_num, unsigned pid)
+{
+	struct edge_to_pid edge;
+
+	if (edge_num >= ARRAY_SIZE(edge_to_pids))
+		return 0;
+
+	edge = edge_to_pids[edge_num];
+	return (edge.local_pid == pid || edge.remote_pid == pid);
+}
 
 void smd_channel_reset(uint32_t restart_pid)
 {
-	struct smd_alloc_elm *shared;
+	struct smd_alloc_elm *shared_pri;
+	struct smd_alloc_elm *shared_sec;
 	unsigned long flags;
 
-	SMx_POWER_INFO("%s: starting reset\n", __func__);
+	SMD_POWER_INFO("%s: starting reset\n", __func__);
 
-	shared = smem_find(ID_CH_ALLOC_TBL, sizeof(*shared) * 64);
-	if (!shared) {
+	shared_pri = smem_find(ID_CH_ALLOC_TBL, sizeof(*shared_pri) * 64);
+	if (!shared_pri) {
 		pr_err("%s: allocation table not initialized\n", __func__);
 		return;
 	}
+	shared_sec = smem_find(SMEM_CHANNEL_ALLOC_TBL_2,
+						sizeof(*shared_sec) * 64);
 
 	/* reset SMSM entry */
 	if (smsm_info.state) {
@@ -903,36 +920,32 @@ void smd_channel_reset(uint32_t restart_pid)
 	/* change all remote states to CLOSING */
 	mutex_lock(&smd_probe_lock);
 	spin_lock_irqsave(&smd_lock, flags);
-	smd_channel_reset_state(shared, SMD_SS_CLOSING, restart_pid);
+	smd_channel_reset_state(shared_pri, PRI_ALLOC_TBL, SMD_SS_CLOSING,
+								restart_pid);
+	if (shared_sec)
+		smd_channel_reset_state(shared_sec, SEC_ALLOC_TBL,
+						SMD_SS_CLOSING, restart_pid);
 	spin_unlock_irqrestore(&smd_lock, flags);
 	mutex_unlock(&smd_probe_lock);
 
-	/* notify SMD processors */
 	mb();
 	smd_fake_irq_handler(0);
-	notify_modem_smd(NULL);
-	notify_dsp_smd(NULL);
-	notify_dsps_smd(NULL);
-	notify_wcnss_smd(NULL);
-	notify_rpm_smd(NULL);
 
 	/* change all remote states to CLOSED */
 	mutex_lock(&smd_probe_lock);
 	spin_lock_irqsave(&smd_lock, flags);
-	smd_channel_reset_state(shared, SMD_SS_CLOSED, restart_pid);
+	smd_channel_reset_state(shared_pri, PRI_ALLOC_TBL, SMD_SS_CLOSED,
+								restart_pid);
+	if (shared_sec)
+		smd_channel_reset_state(shared_sec, SEC_ALLOC_TBL,
+						SMD_SS_CLOSED, restart_pid);
 	spin_unlock_irqrestore(&smd_lock, flags);
 	mutex_unlock(&smd_probe_lock);
 
-	/* notify SMD processors */
 	mb();
 	smd_fake_irq_handler(0);
-	notify_modem_smd(NULL);
-	notify_dsp_smd(NULL);
-	notify_dsps_smd(NULL);
-	notify_wcnss_smd(NULL);
-	notify_rpm_smd(NULL);
 
-	SMx_POWER_INFO("%s: finished reset\n", __func__);
+	SMD_POWER_INFO("%s: finished reset\n", __func__);
 }
 
 /* how many bytes are available for reading */
@@ -1235,14 +1248,14 @@ static void handle_smd_irq(struct list_head *list,
 		}
 		tmp = ch->half_ch->get_state(ch->recv);
 		if (tmp != ch->last_state) {
-			SMx_POWER_INFO("SMD ch%d '%s' State change %d->%d\n",
+			SMD_POWER_INFO("SMD ch%d '%s' State change %d->%d\n",
 					ch->n, ch->name, ch->last_state, tmp);
 			smd_state_change(ch, ch->last_state, tmp);
 			state_change = 1;
 		}
 		if (ch_flags & 0x3) {
 			ch->update_state(ch);
-			SMx_POWER_INFO(
+			SMD_POWER_INFO(
 				"SMD ch%d '%s' Data event 0x%x tx%d/rx%d %dr/%dw : %dr/%dw\n",
 				ch->n, ch->name,
 				ch_flags,
@@ -1257,7 +1270,7 @@ static void handle_smd_irq(struct list_head *list,
 			ch->notify(ch->priv, SMD_EVENT_DATA);
 		}
 		if (ch_flags & 0x4 && !state_change) {
-			SMx_POWER_INFO("SMD ch%d '%s' State update\n",
+			SMD_POWER_INFO("SMD ch%d '%s' State update\n",
 					ch->n, ch->name);
 			ch->notify(ch->priv, SMD_EVENT_STATUS);
 		}
@@ -1272,7 +1285,7 @@ static inline void log_irq(uint32_t subsystem)
 
 	(void) subsys;
 
-	SMx_POWER_INFO("SMD Int %s->Apps\n", subsys);
+	SMD_POWER_INFO("SMD Int %s->Apps\n", subsys);
 }
 
 irqreturn_t smd_modem_irq_handler(int irq, void *data)
@@ -2208,11 +2221,11 @@ int smd_mask_receive_interrupt(smd_channel_t *ch, bool mask)
 		return -ENODEV;
 
 	if (mask) {
-		SMx_POWER_INFO("SMD Masking interrupts from %s\n",
+		SMD_POWER_INFO("SMD Masking interrupts from %s\n",
 				edge_to_pids[ch->type].subsys_name);
 		irq_chip->irq_mask(irq_data);
 	} else {
-		SMx_POWER_INFO("SMD Unmasking interrupts from %s\n",
+		SMD_POWER_INFO("SMD Unmasking interrupts from %s\n",
 				edge_to_pids[ch->type].subsys_name);
 		irq_chip->irq_unmask(irq_data);
 	}
@@ -2508,7 +2521,7 @@ static void smsm_cb_snapshot(uint32_t use_wakelock)
 	if (use_wakelock) {
 		spin_lock_irqsave(&smsm_snapshot_count_lock, flags);
 		if (smsm_snapshot_count == 0) {
-			SMx_POWER_INFO("SMSM snapshot wake lock\n");
+			SMSM_POWER_INFO("SMSM snapshot wake lock\n");
 			wake_lock(&smsm_snapshot_wakelock);
 		}
 		++smsm_snapshot_count;
@@ -2544,7 +2557,7 @@ restore_snapshot_count:
 		if (smsm_snapshot_count) {
 			--smsm_snapshot_count;
 			if (smsm_snapshot_count == 0) {
-				SMx_POWER_INFO("SMSM snapshot wake unlock\n");
+				SMSM_POWER_INFO("SMSM snapshot wake unlock\n");
 				wake_unlock(&smsm_snapshot_wakelock);
 			}
 		} else {
@@ -2639,28 +2652,28 @@ static irqreturn_t smsm_irq_handler(int irq, void *data)
 
 irqreturn_t smsm_modem_irq_handler(int irq, void *data)
 {
-	SMx_POWER_INFO("SMSM Int Modem->Apps\n");
+	SMSM_POWER_INFO("SMSM Int Modem->Apps\n");
 	++interrupt_stats[SMD_MODEM].smsm_in_count;
 	return smsm_irq_handler(irq, data);
 }
 
 irqreturn_t smsm_dsp_irq_handler(int irq, void *data)
 {
-	SMx_POWER_INFO("SMSM Int LPASS->Apps\n");
+	SMSM_POWER_INFO("SMSM Int LPASS->Apps\n");
 	++interrupt_stats[SMD_Q6].smsm_in_count;
 	return smsm_irq_handler(irq, data);
 }
 
 irqreturn_t smsm_dsps_irq_handler(int irq, void *data)
 {
-	SMx_POWER_INFO("SMSM Int DSPS->Apps\n");
+	SMSM_POWER_INFO("SMSM Int DSPS->Apps\n");
 	++interrupt_stats[SMD_DSPS].smsm_in_count;
 	return smsm_irq_handler(irq, data);
 }
 
 irqreturn_t smsm_wcnss_irq_handler(int irq, void *data)
 {
-	SMx_POWER_INFO("SMSM Int WCNSS->Apps\n");
+	SMSM_POWER_INFO("SMSM Int WCNSS->Apps\n");
 	++interrupt_stats[SMD_WCNSS].smsm_in_count;
 	return smsm_irq_handler(irq, data);
 }
@@ -2750,7 +2763,7 @@ int smsm_change_state(uint32_t smsm_entry,
 	old_state = __raw_readl(SMSM_STATE_ADDR(smsm_entry));
 	new_state = (old_state & ~clear_mask) | set_mask;
 	__raw_writel(new_state, SMSM_STATE_ADDR(smsm_entry));
-	SMx_POWER_INFO("%s %d:%08x->%08x", __func__, smsm_entry,
+	SMSM_POWER_INFO("%s %d:%08x->%08x", __func__, smsm_entry,
 			old_state, new_state);
 	notify_other_smsm(SMSM_APPS_STATE, (old_state ^ new_state));
 
@@ -2811,7 +2824,7 @@ void notify_smsm_cb_clients_worker(struct work_struct *work)
 
 			state_changes = state_info->last_value ^ new_state;
 			if (state_changes) {
-				SMx_POWER_INFO("SMSM Change %d: %08x->%08x\n",
+				SMSM_POWER_INFO("SMSM Change %d: %08x->%08x\n",
 						n, state_info->last_value,
 						new_state);
 				list_for_each_entry(cb_info,
@@ -2842,7 +2855,7 @@ void notify_smsm_cb_clients_worker(struct work_struct *work)
 			if (smsm_snapshot_count) {
 				--smsm_snapshot_count;
 				if (smsm_snapshot_count == 0) {
-					SMx_POWER_INFO("SMSM snapshot"
+					SMSM_POWER_INFO("SMSM snapshot"
 						   " wake unlock\n");
 					wake_unlock(&smsm_snapshot_wakelock);
 				}
@@ -3217,7 +3230,13 @@ int __init msm_smd_init(void)
 
 	smd_log_ctx = ipc_log_context_create(NUM_LOG_PAGES, "smd");
 	if (!smd_log_ctx) {
-		pr_err("%s: unable to create logging context\n", __func__);
+		pr_err("%s: unable to create SMD logging context\n", __func__);
+		msm_smd_debug_mask = 0;
+	}
+
+	smsm_log_ctx = ipc_log_context_create(NUM_LOG_PAGES, "smsm");
+	if (!smsm_log_ctx) {
+		pr_err("%s: unable to create SMSM logging context\n", __func__);
 		msm_smd_debug_mask = 0;
 	}
 

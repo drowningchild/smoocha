@@ -191,7 +191,7 @@ static int __ion_cp_protect_buffer(struct ion_buffer *buffer, int version,
 				version, data);
 
 		if (ret_value) {
-			pr_err("Failed to secure buffer %p, error %d\n",
+			pr_debug("Failed to secure buffer %p, error %d\n",
 				buffer, ret_value);
 			atomic_dec(&buf->secure_cnt);
 		} else {
@@ -286,7 +286,7 @@ int ion_cp_secure_buffer(struct ion_buffer *buffer, int version, void *data,
 		goto out_unlock;
 	}
 
-	if (atomic_read(&buf->secure_cnt)) {
+	if (atomic_read(&buf->secure_cnt) && !buf->ignore_check) {
 		if (buf->version != version || buf->data != data) {
 			pr_err("%s: Trying to re-secure buffer with different values",
 				__func__);

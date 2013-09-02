@@ -14,6 +14,7 @@
 
 &venus_iommu {
 	status = "ok";
+	vdd-supply = <&gdsc_venus>;
 
 	qcom,iommu-bfb-regs =  <0x204c
 				0x2514
@@ -93,11 +94,11 @@
 
 
 	venus_ns: qcom,iommu-ctx@fdc8c000 {
-		qcom,iommu-ctx-sids = <0 1 2 3 4 5 7>;
+		qcom,iommu-ctx-sids = <0 1 2 3 4 5 7 8 9 10 11>;
 	};
 
 	venus_sec_bitstream: qcom,iommu-ctx@fdc8d000 {
-		qcom,iommu-ctx-sids = <0x80 0x81 0x82 0x83 0x84>;
+		qcom,iommu-ctx-sids = <0x80 0x81 0x82 0x83 0x84 0x88 0x8a>;
 		label = "venus_sec_bitstream";
 	};
 
@@ -114,7 +115,7 @@
 		compatible = "qcom,msm-smmu-v1-ctx";
 		reg = <0xfdc90000 0x1000>;
 		interrupts = <0 42 0>;
-		qcom,iommu-ctx-sids = <0x87 0xA0>;
+		qcom,iommu-ctx-sids = <0x87 0x89 0x8b 0xa0>;
 		label = "venus_sec_non_pixel";
 		qcom,secure-context;
 	};
@@ -122,6 +123,7 @@
 
 &jpeg_iommu {
 	status = "ok";
+	vdd-supply = <&gdsc_jpeg>;
 
 	qcom,iommu-bfb-regs =  <0x204c
 				0x2514
@@ -191,6 +193,7 @@
 
 &mdp_iommu {
 	status = "ok";
+	vdd-supply = <&gdsc_mdss>;
 
 	qcom,iommu-bfb-regs =  <0x204c
 				0x2514
@@ -268,6 +271,8 @@
 
 &kgsl_iommu {
 	status = "ok";
+	vdd-supply = <&gdsc_oxili_cx>;
+	qcom,alt-vdd-supply = <&gdsc_oxili_gx>;
 
 	qcom,iommu-bfb-regs =  <0x204c
 				0x2514
@@ -377,6 +382,7 @@
 
 &vfe_iommu {
 	status = "ok";
+	vdd-supply = <&gdsc_vfe>;
 
 	qcom,iommu-bfb-regs =  <0x204c
 				0x2514
@@ -466,6 +472,7 @@
 
 &vpu_iommu {
 	status = "ok";
+	vdd-supply = <&gdsc_vpu>;
 };
 
 &lpass_qdsp_iommu {

@@ -35,8 +35,180 @@
 
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
+#include <linux/of.h>
 
 #include "ufshcd.h"
+
+static const struct of_device_id ufs_of_match[];
+static struct ufs_hba_variant_ops *get_variant_ops(struct device *dev)
+{
+	if (dev->of_node) {
+		const struct of_device_id *match;
+		match = of_match_node(ufs_of_match, dev->of_node);
+		if (match)
+			return (struct ufs_hba_variant_ops *)match->data;
+	}
+
+	return NULL;
+}
+
+static int ufshcd_parse_clock_info(struct ufs_hba *hba)
+{
+	int ret = 0;
+	int cnt;
+	int i;
+	struct device *dev = hba->dev;
+	struct device_node *np = dev->of_node;
+	char *name;
+	u32 *clkfreq = NULL;
+	struct ufs_clk_info *clki;
+
+	if (!np)
+		goto out;
+
+	INIT_LIST_HEAD(&hba->clk_list_head);
+
+	cnt = of_property_count_strings(np, "clock-names");
+	if (!cnt || (cnt == -EINVAL)) {
+		dev_info(dev, "%s: Unable to find clocks, assuming enabled\n",
+				__func__);
+	} else if (cnt < 0) {
+		dev_err(dev, "%s: count clock strings failed, err %d\n",
+				__func__, cnt);
+		ret = cnt;
+	}
+
+	if (cnt <= 0)
+		goto out;
+
+	clkfreq = kzalloc(cnt * sizeof(*clkfreq), GFP_KERNEL);
+	if (!clkfreq) {
+		ret = -ENOMEM;
+		dev_err(dev, "%s: memory alloc failed\n", __func__);
+		goto out;
+	}
+
+	ret = of_property_read_u32_array(np,
+			"max-clock-frequency-hz", clkfreq, cnt);
+	if (ret && (ret != -EINVAL)) {
+		dev_err(dev, "%s: invalid max-clock-frequency-hz property, %d\n",
+				__func__, ret);
+		goto out;
+	}
+
+	for (i = 0; i < cnt; i++) {
+		ret = of_property_read_string_index(np,
+				"clock-names", i, (const char **)&name);
+		if (ret)
+			goto out;
+
+		clki = devm_kzalloc(dev, sizeof(*clki), GFP_KERNEL);
+		if (!clki) {
+			ret = -ENOMEM;
+			goto out;
+		}
+
+		clki->max_freq = clkfreq[i];
+		clki->name = kstrdup(name, GFP_KERNEL);
+		list_add_tail(&clki->list, &hba->clk_list_head);
+	}
+out:
+	kfree(clkfreq);
+	return ret;
+}
+
+#define MAX_PROP_SIZE 32
+static int ufshcd_populate_vreg(struct device *dev, const char *name,
+		struct ufs_vreg **out_vreg)
+{
+	int ret = 0;
+	char prop_name[MAX_PROP_SIZE];
+	struct ufs_vreg *vreg = NULL;
+	struct device_node *np = dev->of_node;
+
+	if (!np) {
+		dev_err(dev, "%s: non DT initialization\n", __func__);
+		goto out;
+	}
+
+	snprintf(prop_name, MAX_PROP_SIZE, "%s-supply", name);
+	if (!of_parse_phandle(np, prop_name, 0)) {
+		dev_info(dev, "%s: Unable to find %s regulator, assuming enabled\n",
+				__func__, prop_name);
+		goto out;
+	}
+
+	vreg = devm_kzalloc(dev, sizeof(*vreg), GFP_KERNEL);
+	if (!vreg) {
+		dev_err(dev, "No memory for %s regulator\n", name);
+		goto out;
+	}
+
+	vreg->name = kstrdup(name, GFP_KERNEL);
+
+	snprintf(prop_name, MAX_PROP_SIZE, "%s-max-microamp", name);
+	ret = of_property_read_u32(np, prop_name, &vreg->max_uA);
+	if (ret) {
+		dev_err(dev, "%s: unable to find %s err %d\n",
+				__func__, prop_name, ret);
+		goto out_free;
+	}
+
+	vreg->min_uA = 0;
+	if (!strcmp(name, "vcc")) {
+		if (of_property_read_bool(np, "vcc-supply-1p8")) {
+			vreg->min_uV = UFS_VREG_VCC_1P8_MIN_UV;
+			vreg->max_uV = UFS_VREG_VCC_1P8_MAX_UV;
+		} else {
+			vreg->min_uV = UFS_VREG_VCC_MIN_UV;
+			vreg->max_uV = UFS_VREG_VCC_MAX_UV;
+		}
+	} else if (!strcmp(name, "vccq")) {
+		vreg->min_uV = UFS_VREG_VCCQ_MIN_UV;
+		vreg->max_uV = UFS_VREG_VCCQ_MAX_UV;
+	} else if (!strcmp(name, "vccq2")) {
+		vreg->min_uV = UFS_VREG_VCCQ2_MIN_UV;
+		vreg->max_uV = UFS_VREG_VCCQ2_MAX_UV;
+	}
+
+	goto out;
+
+out_free:
+	devm_kfree(dev, vreg);
+	vreg = NULL;
+out:
+	if (!ret)
+		*out_vreg = vreg;
+	return ret;
+}
+
+/**
+ * ufshcd_parse_regulator_info - get regulator info from device tree
+ * @hba: per adapter instance
+ *
+ * Get regulator info from device tree for vcc, vccq, vccq2 power supplies.
+ * If any of the supplies are not defined it is assumed that they are always-on
+ * and hence return zero. If the property is defined but parsing is failed
+ * then return corresponding error.
+ */
+static int ufshcd_parse_regulator_info(struct ufs_hba *hba)
+{
+	int err;
+	struct device *dev = hba->dev;
+	struct ufs_vreg_info *info = &hba->vreg_info;
+
+	err = ufshcd_populate_vreg(dev, "vcc", &info->vcc);
+	if (err)
+		goto out;
+
+	err = ufshcd_populate_vreg(dev, "vccq", &info->vccq);
+	if (err)
+		goto out;
+
+	err = ufshcd_populate_vreg(dev, "vccq2", &info->vccq2);
+out:
+	return err;
+}
 
 #ifdef CONFIG_PM
 /**
@@ -150,10 +322,31 @@ static int ufshcd_pltfrm_probe(struct platform_device *pdev)
 		goto out;
 	}
 
+	err = ufshcd_alloc_host(dev, &hba);
+	if (err) {
+		dev_err(&pdev->dev, "Allocation failed\n");
+		goto out;
+	}
+
+	hba->vops = get_variant_ops(&pdev->dev);
+
+	err = ufshcd_parse_clock_info(hba);
+	if (err) {
+		dev_err(&pdev->dev, "%s: clock parse failed %d\n",
+				__func__, err);
+		goto out;
+	}
+	err = ufshcd_parse_regulator_info(hba);
+	if (err) {
+		dev_err(&pdev->dev, "%s: regulator init failed %d\n",
+				__func__, err);
+		goto out;
+	}
+
 	pm_runtime_set_active(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
 
-	err = ufshcd_init(dev, &hba, mmio_base, irq);
+	err = ufshcd_init(hba, mmio_base, irq);
 	if (err) {
 		dev_err(dev, "Intialization failed\n");
 		goto out_disable_rpm;
@@ -187,6 +380,7 @@ static int ufshcd_pltfrm_remove(struct platform_device *pdev)
 
 static const struct of_device_id ufs_of_match[] = {
 	{ .compatible = "jedec,ufs-1.1"},
+	{ .compatible = "qcom,ufshc", .data = (void *)&ufs_hba_msm_vops, },
 	{},
 };
 

@@ -44,25 +44,30 @@
 #define POOL_TYPE_HSIC_WRITE	11
 #define POOL_TYPE_HSIC_2_WRITE	12
 #define POOL_TYPE_ALL		10
+#define POOL_TYPE_DCI		20
 
 #define POOL_COPY_IDX		0
 #define POOL_HDLC_IDX		1
 #define POOL_USER_IDX		2
 #define POOL_WRITE_STRUCT_IDX	3
-#define POOL_HSIC_IDX		4
-#define POOL_HSIC_2_IDX		5
-#define POOL_HSIC_3_IDX		6
-#define POOL_HSIC_4_IDX		7
-#define POOL_HSIC_WRITE_IDX	8
-#define POOL_HSIC_2_WRITE_IDX	9
-#define POOL_HSIC_3_WRITE_IDX	10
-#define POOL_HSIC_4_WRITE_IDX	11
+#define POOL_DCI_IDX		4
+#define POOL_BRIDGE_BASE	POOL_DCI_IDX
+#define POOL_HSIC_IDX		(POOL_BRIDGE_BASE + 1)
+#define POOL_HSIC_2_IDX		(POOL_BRIDGE_BASE + 2)
+#define POOL_HSIC_3_IDX		(POOL_BRIDGE_BASE + 3)
+#define POOL_HSIC_4_IDX		(POOL_BRIDGE_BASE + 4)
+#define POOL_HSIC_WRITE_IDX	(POOL_BRIDGE_BASE + 5)
+#define POOL_HSIC_2_WRITE_IDX	(POOL_BRIDGE_BASE + 6)
+#define POOL_HSIC_3_WRITE_IDX	(POOL_BRIDGE_BASE + 7)
+#define POOL_HSIC_4_WRITE_IDX	(POOL_BRIDGE_BASE + 8)
 
 #ifdef CONFIG_DIAGFWD_BRIDGE_CODE
-#define NUM_MEMORY_POOLS	12
+#define NUM_MEMORY_POOLS	13
 #else
-#define NUM_MEMORY_POOLS	4
+#define NUM_MEMORY_POOLS	5
 #endif
+
+#define MAX_SSID_PER_RANGE	200
 
 #define MODEM_DATA		0
 #define LPASS_DATA		1
@@ -73,7 +78,13 @@
 #define HSIC_2_DATA		6
 #define SMUX_DATA		10
 #define APPS_PROC		1
-#define MSG_MASK_SIZE 10000
+/*
+ * Each row contains First (uint32_t), Last (uint32_t), Actual
+ * last (uint32_t) values along with the range of SSIDs
+ * (MAX_SSID_PER_RANGE*uint32_t).
+ * And there are MSG_MASK_TBL_CNT rows.
+ */
+#define MSG_MASK_SIZE		((MAX_SSID_PER_RANGE+3) * 4 * MSG_MASK_TBL_CNT)
 #define LOG_MASK_SIZE 8000
 #define EVENT_MASK_SIZE 1000
 #define USER_SPACE_DATA 8192
@@ -302,17 +313,21 @@ struct diagchar_dev {
 	unsigned int poolsize_user;
 	unsigned int itemsize_write_struct;
 	unsigned int poolsize_write_struct;
+	unsigned int itemsize_dci;
+	unsigned int poolsize_dci;
 	unsigned int debug_flag;
 	/* State for the mempool for the char driver */
 	mempool_t *diagpool;
 	mempool_t *diag_hdlc_pool;
 	mempool_t *diag_user_pool;
 	mempool_t *diag_write_struct_pool;
+	mempool_t *diag_dci_pool;
 	spinlock_t diag_mem_lock;
 	int count;
 	int count_hdlc_pool;
 	int count_user_pool;
 	int count_write_struct_pool;
+	int count_dci_pool;
 	int used;
 	/* Buffers for masks */
 	struct mutex diag_cntl_mutex;
@@ -416,5 +431,6 @@ extern uint16_t wrap_count;
 
 void diag_get_timestamp(char *time_str);
 int diag_find_polling_reg(int i);
+void check_drain_timer(void);
 
 #endif

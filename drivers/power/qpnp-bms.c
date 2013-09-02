@@ -23,6 +23,7 @@
 #include <linux/spmi.h>
 #include <linux/rtc.h>
 #include <linux/delay.h>
+#include <linux/sched.h>
 #include <linux/qpnp/qpnp-adc.h>
 #include <linux/qpnp/power-on.h>
 #include <linux/of_batterydata.h>
@@ -128,7 +129,7 @@ struct fcc_sample {
 };
 
 struct bms_irq {
-	unsigned int	irq;
+	int		irq;
 	unsigned long	disabled;
 };
 
@@ -143,6 +144,7 @@ struct qpnp_bms_chip {
 	bool				bms_psy_registered;
 	struct power_supply		*batt_psy;
 	struct spmi_device		*spmi;
+	wait_queue_head_t		bms_wait_queue;
 	u16				base;
 	u16				iadc_base;
 
@@ -891,7 +893,7 @@ static int read_soc_params_raw(struct qpnp_bms_chip *chip,
 				struct raw_soc_params *raw,
 				int batt_temp)
 {
-	bool warm_reset = false;
+	int warm_reset;
 	int rc;
 
 	mutex_lock(&chip->bms_output_lock);
@@ -1682,6 +1684,7 @@ static int report_voltage_based_soc(struct qpnp_bms_chip *chip)
 #define SOC_CATCHUP_SEC_PER_PERCENT	60
 #define MAX_CATCHUP_SOC	(SOC_CATCHUP_SEC_MAX / SOC_CATCHUP_SEC_PER_PERCENT)
 #define SOC_CHANGE_PER_SEC		5
+#define REPORT_SOC_WAIT_MS		10000
 static int report_cc_based_soc(struct qpnp_bms_chip *chip)
 {
 	int soc, soc_change;
@@ -1692,6 +1695,18 @@ static int report_cc_based_soc(struct qpnp_bms_chip *chip)
 	int batt_temp;
 	int rc;
 	bool charging, charging_since_last_report;
+
+	rc = wait_event_interruptible_timeout(chip->bms_wait_queue,
+			chip->calculated_soc != -EINVAL,
+			round_jiffies_relative(msecs_to_jiffies
+			(REPORT_SOC_WAIT_MS)));
+
+	if (rc == 0 && chip->calculated_soc == -EINVAL) {
+		pr_debug("calculate soc timed out\n");
+	} else if (rc == -ERESTARTSYS) {
+		pr_err("Wait for SoC interrupted.\n");
+		return rc;
+	}
 
 	rc = qpnp_vadc_read(chip->vadc_dev, LR_MUX1_BATT_THERM, &result);
 
@@ -2305,6 +2320,7 @@ done_calculating:
 				params.delta_time_s);
 	}
 	mutex_unlock(&chip->last_soc_mutex);
+	wake_up_interruptible(&chip->bms_wait_queue);
 
 	if (new_calculated_soc != previous_soc && chip->bms_psy_registered) {
 		power_supply_changed(&chip->bms_psy);
@@ -3107,7 +3123,7 @@ static void batfet_status_check(struct qpnp_bms_chip *chip)
 
 static void battery_insertion_check(struct qpnp_bms_chip *chip)
 {
-	bool present = is_battery_present(chip);
+	int present = (int)is_battery_present(chip);
 
 	mutex_lock(&chip->vbat_monitor_mutex);
 	if (chip->battery_present != present) {
@@ -3589,8 +3605,10 @@ static int bms_request_irqs(struct qpnp_bms_chip *chip)
 	int rc;
 
 	SPMI_REQUEST_IRQ(chip, rc, sw_cc_thr);
+	disable_bms_irq(&chip->sw_cc_thr_irq);
 	enable_irq_wake(chip->sw_cc_thr_irq.irq);
 	SPMI_REQUEST_IRQ(chip, rc, ocv_thr);
+	disable_bms_irq(&chip->ocv_thr_irq);
 	enable_irq_wake(chip->ocv_thr_irq.irq);
 	return 0;
 }
@@ -3767,6 +3785,15 @@ static int read_iadc_channel_select(struct qpnp_bms_chip *chip)
 				return rc;
 			}
 		}
+	} else {
+		rc = qpnp_masked_write_iadc(chip,
+				IADC1_BMS_ADC_INT_RSNSN_CTL,
+				ADC_INT_RSNSN_CTL_MASK, 0x0);
+		if (rc) {
+			pr_err("Unable to set batfet config %x to %x: %d\n",
+				IADC1_BMS_ADC_INT_RSNSN_CTL, 0x0, rc);
+			return rc;
+		}
 	}
 
 	return 0;
@@ -3850,6 +3877,7 @@ static int __devinit qpnp_bms_probe(struct spmi_device *spmi)
 	mutex_init(&chip->vbat_monitor_mutex);
 	mutex_init(&chip->soc_invalidation_mutex);
 	mutex_init(&chip->last_soc_mutex);
+	init_waitqueue_head(&chip->bms_wait_queue);
 
 	warm_reset = qpnp_pon_is_warm_reset();
 	rc = warm_reset;

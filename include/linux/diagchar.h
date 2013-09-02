@@ -13,25 +13,32 @@
 #ifndef DIAGCHAR_SHARED
 #define DIAGCHAR_SHARED
 
-#define MSG_MASKS_TYPE			1
-#define LOG_MASKS_TYPE			2
-#define EVENT_MASKS_TYPE		4
-#define PKT_TYPE			8
-#define DEINIT_TYPE			16
-#define USER_SPACE_DATA_TYPE		32
-#define DCI_DATA_TYPE			64
-#define CALLBACK_DATA_TYPE		128
+#define MSG_MASKS_TYPE		0x00000001
+#define LOG_MASKS_TYPE		0x00000002
+#define EVENT_MASKS_TYPE	0x00000004
+#define PKT_TYPE		0x00000008
+#define DEINIT_TYPE		0x00000010
+#define USER_SPACE_DATA_TYPE	0x00000020
+#define DCI_DATA_TYPE		0x00000040
+#define CALLBACK_DATA_TYPE	0x00000080
+#define DCI_LOG_MASKS_TYPE	0x00000100
+#define DCI_EVENT_MASKS_TYPE	0x00000200
+
 #define USB_MODE			1
 #define MEMORY_DEVICE_MODE		2
 #define NO_LOGGING_MODE			3
 #define UART_MODE			4
 #define SOCKET_MODE			5
 #define CALLBACK_MODE			6
+
 /* different values that go in for diag_data_type */
+
 #define DATA_TYPE_EVENT         	0
 #define DATA_TYPE_F3            	1
 #define DATA_TYPE_LOG           	2
 #define DATA_TYPE_RESPONSE      	3
+#define DATA_TYPE_DCI_LOG		0x00000100
+#define DATA_TYPE_DCI_EVENT		0x00000200
 
 /* Different IOCTL values */
 #define DIAG_IOCTL_COMMAND_REG  	0
@@ -119,10 +126,10 @@ the appropriate macros. */
 /* This needs to be modified manually now, when we add
  a new RANGE of SSIDs to the msg_mask_tbl */
 #define MSG_MASK_TBL_CNT		24
-#define EVENT_LAST_ID			0x09CB
+#define EVENT_LAST_ID			0x09D8
 
 #define MSG_SSID_0			0
-#define MSG_SSID_0_LAST			97
+#define MSG_SSID_0_LAST			100
 #define MSG_SSID_1			500
 #define MSG_SSID_1_LAST			506
 #define MSG_SSID_2			1000
@@ -154,7 +161,7 @@ the appropriate macros. */
 #define MSG_SSID_15			8000
 #define MSG_SSID_15_LAST		8000
 #define MSG_SSID_16			8500
-#define MSG_SSID_16_LAST		8523
+#define MSG_SSID_16_LAST		8524
 #define MSG_SSID_17			9000
 #define MSG_SSID_17_LAST		9008
 #define MSG_SSID_18			9500
@@ -182,7 +189,7 @@ static const uint32_t msg_bld_masks_0[] = {
 	MSG_LVL_LOW,
 	MSG_LVL_ERROR,
 	MSG_LVL_LOW,
-	MSG_LVL_MED,
+	MSG_LVL_LOW,
 	MSG_LVL_MED,
 	MSG_LVL_HIGH,
 	MSG_LVL_ERROR,
@@ -280,18 +287,21 @@ static const uint32_t msg_bld_masks_0[] = {
 	MSG_LVL_LOW,
 	MSG_LVL_LOW,
 	MSG_LVL_LOW|MSG_LVL_MED|MSG_LVL_HIGH|MSG_LVL_ERROR|MSG_LVL_FATAL,
-	MSG_LVL_MED,
-	MSG_LVL_LOW|MSG_LVL_MED|MSG_LVL_HIGH|MSG_LVL_ERROR|MSG_LVL_FATAL,
-	MSG_LVL_LOW,
-	MSG_LVL_MED,
-	MSG_LVL_LOW,
-	MSG_LVL_LOW,
-	MSG_LVL_LOW,
-	MSG_LVL_LOW,
-	MSG_LVL_LOW,
 	MSG_LVL_LOW,
 	MSG_LVL_LOW|MSG_LVL_MED|MSG_LVL_HIGH|MSG_LVL_ERROR|MSG_LVL_FATAL,
+	MSG_LVL_LOW,
 	MSG_LVL_MED,
+	MSG_LVL_LOW,
+	MSG_LVL_LOW,
+	MSG_LVL_LOW,
+	MSG_LVL_LOW,
+	MSG_LVL_LOW,
+	MSG_LVL_LOW,
+	MSG_LVL_LOW|MSG_LVL_MED|MSG_LVL_HIGH|MSG_LVL_ERROR|MSG_LVL_FATAL,
+	MSG_LVL_MED,
+	MSG_LVL_HIGH,
+	MSG_LVL_LOW,
+	MSG_LVL_HIGH,
 };
 
 static const uint32_t msg_bld_masks_1[] = {
@@ -632,6 +642,7 @@ static const uint32_t msg_bld_masks_16[] = {
 	MSG_LVL_LOW,
 	MSG_LVL_LOW,
 	MSG_LVL_LOW,
+	MSG_LVL_LOW,
 };
 
 static const uint32_t msg_bld_masks_17[] =  {
@@ -728,7 +739,7 @@ static const uint32_t msg_bld_masks_22[] = {
 /* LOG CODES */
 
 #define LOG_0	0x0
-#define LOG_1	0x1808
+#define LOG_1	0x182F
 #define LOG_2	0x0
 #define LOG_3	0x0
 #define LOG_4	0x4910

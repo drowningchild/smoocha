@@ -25,6 +25,7 @@
 /include/ "msm-gdsc.dtsi"
 /include/ "msmsamarium-ion.dtsi"
 /include/ "msmsamarium-smp2p.dtsi"
+/include/ "msmsamarium-pm.dtsi"
 
 &soc {
 	#address-cells = <1>;
@@ -57,14 +58,14 @@
 		clock-frequency = <19200000>;
 	};
 
-	uartblsp0dm1: serial@f991e000 {
+	blsp1_uart1: serial@f991e000 {
 		compatible = "qcom,msm-lsuart-v14";
 		reg = <0xf991e000 0x1000>;
 		interrupts = <0 108 0>;
 		status = "disabled";
 	};
 
-	uartblsp0dm2: serial@f991f000 {
+	blsp1_uart2: serial@f991f000 {
 		compatible = "qcom,msm-lsuart-v14";
 		reg = <0xf991f000 0x1000>;
 		interrupts = <0 109 0>;
@@ -119,6 +120,22 @@
 			<&msmgpio 1 0>, /* MISO */
 			<&msmgpio 0 0>; /* MOSI */
 		cs-gpios = <&msmgpio 9 0>;
+	};
+
+	i2c_2: i2c@f9924000 { /* BLSP1 QUP2 */
+		cell-index = <2>;
+		compatible = "qcom,i2c-qup";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg-names = "qup_phys_addr";
+		reg = <0xf9924000 0x1000>;
+		interrupt-names = "qup_err_intr";
+		interrupts = <0 96 0>;
+		qcom,i2c-bus-freq = <100000>;
+		qcom,i2c-src-freq = <19200000>;
+		qcom,sda-gpio = <&msmgpio 6 0>;
+		qcom,scl-gpio = <&msmgpio 7 0>;
+		qcom,master-id = <86>;
 	};
 
 	qcom,wdt@f9017000 {
@@ -209,6 +226,13 @@
 		};
 	};
 
+	rpm_bus: qcom,rpm-smd {
+		compatible = "qcom,rpm-smd";
+		rpm-channel-name = "rpm_requests";
+		rpm-channel-type = <15>; /* SMD_APPS_RPM */
+		rpm-standalone; /* TODO: remove this after bring up */
+	};
+
 	android_usb@fe8050c8 {
 		compatible = "qcom,android-usb";
 		reg = <0xfe8050c8 0xc8>;
@@ -264,7 +288,6 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 		cell-index = <0>;
-		qcom,not-wakeup;     /* Needed until MPM is fully configured. */
 	};
 
 	tsens: tsens@fc4a8000 {
@@ -289,6 +312,89 @@
 				<1 618 0 0>,
 				<1 618 0 800>;
         };
+
+	qcom,mss@fc880000 {
+		compatible = "qcom,pil-q6v5-mss";
+		reg = <0xfc880000 0x100>,
+		      <0xfd485000 0x400>,
+		      <0xfc820000 0x020>,
+		      <0xfc401680 0x004>;
+		reg-names = "qdsp6_base", "halt_base", "rmb_base",
+			    "restart_reg";
+
+		interrupts = <0 24 1>;
+		vdd_mss-supply = <&pma8084_s6>;
+		vdd_cx-supply = <&pma8084_s2_corner>;
+		vdd_mx-supply = <&pma8084_s1>;
+		vdd_pll-supply = <&pma8084_l12>;
+		qcom,vdd_pll = <1800000>;
+		qcom,firmware-name = "mba";
+		qcom,pil-self-auth;
+
+		/* GPIO inputs from mss */
+		qcom,gpio-err-fatal = <&smp2pgpio_ssr_smp2p_1_in 0 0>;
+		qcom,gpio-err-ready = <&smp2pgpio_ssr_smp2p_1_in 1 0>;
+		qcom,gpio-proxy-unvote = <&smp2pgpio_ssr_smp2p_1_in 2 0>;
+		qcom,gpio-stop-ack = <&smp2pgpio_ssr_smp2p_1_in 3 0>;
+
+		/* GPIO output to mss */
+		qcom,gpio-force-stop = <&smp2pgpio_ssr_smp2p_1_out 0 0>;
+	};
+
+	qcom,pronto@fb21b000 {
+		compatible = "qcom,pil-pronto";
+		reg = <0xfb21b000 0x3000>,
+		      <0xfc401700 0x4>,
+		      <0xfd485300 0xc>;
+		reg-names = "pmu_base", "clk_base", "halt_base";
+		interrupts = <0 149 1>;
+		vdd_pronto_pll-supply = <&pma8084_l12>;
+
+		qcom,firmware-name = "wcnss";
+
+		/* GPIO inputs from wcnss */
+		qcom,gpio-err-fatal = <&smp2pgpio_ssr_smp2p_4_in 0 0>;
+		qcom,gpio-err-ready = <&smp2pgpio_ssr_smp2p_4_in 1 0>;
+		qcom,gpio-proxy-unvote = <&smp2pgpio_ssr_smp2p_4_in 2 0>;
+
+		/* GPIO output to wcnss */
+		qcom,gpio-force-stop = <&smp2pgpio_ssr_smp2p_4_out 0 0>;
+	};
+
+	qcom,venus@fdce0000 {
+		compatible = "qcom,pil-venus";
+		reg = <0xfdce0000 0x4000>,
+		      <0xfdc80000 0x400>;
+		reg-names = "wrapper_base", "vbif_base";
+		vdd-supply = <&gdsc_venus>;
+
+		qcom,firmware-name = "venus";
+	};
+
+	qcom,lpass@fe200000 {
+		compatible = "qcom,pil-q6v5-lpass";
+		reg = <0xfe200000 0x00100>,
+		      <0xfd485100 0x00010>,
+		      <0xfc4016c0 0x00004>;
+		reg-names = "qdsp6_base", "halt_base", "restart_reg";
+		vdd_cx-supply = <&pma8084_s2_corner>;
+		interrupts = <0 162 1>;
+
+		qcom,firmware-name = "adsp";
+
+		/* GPIO inputs from lpass */
+		qcom,gpio-err-fatal = <&smp2pgpio_ssr_smp2p_2_in 0 0>;
+		qcom,gpio-proxy-unvote = <&smp2pgpio_ssr_smp2p_2_in 2 0>;
+		qcom,gpio-err-ready = <&smp2pgpio_ssr_smp2p_2_in 1 0>;
+
+		/* GPIO output to lpass */
+		qcom,gpio-force-stop = <&smp2pgpio_ssr_smp2p_2_out 0 0>;
+	};
+};
+
+&gdsc_venus {
+	qcom,clock-names = "core_clk";
+	status = "ok";
 };
 
 /include/ "msm-pma8084.dtsi"

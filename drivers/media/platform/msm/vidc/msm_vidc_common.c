@@ -526,8 +526,15 @@ static void handle_load_resource_done(enum command_response cmd, void *data)
 {
 	struct msm_vidc_cb_cmd_done *response = data;
 	struct msm_vidc_inst *inst;
-	if (response)
+	if (response) {
 		inst = (struct msm_vidc_inst *)response->session_id;
+		if (response->status) {
+			dprintk(VIDC_ERR,
+				"Load resource response from FW : 0x%x",
+				response->status);
+			msm_comm_generate_session_error(inst);
+		}
+	}
 	else
 		dprintk(VIDC_ERR,
 			"Failed to get valid response for load resource\n");
@@ -1424,8 +1431,11 @@ static int msm_vidc_load_resources(int flipped_state,
 		return -EINVAL;
 	}
 
+	mutex_lock(&inst->core->sync_lock);
 	num_mbs_per_sec = msm_comm_get_load(inst->core, MSM_VIDC_DECODER);
 	num_mbs_per_sec += msm_comm_get_load(inst->core, MSM_VIDC_ENCODER);
+	mutex_unlock(&inst->core->sync_lock);
+
 	if (num_mbs_per_sec > inst->core->resources.max_load) {
 		dprintk(VIDC_ERR, "HW is overloaded, needed: %d max: %d\n",
 			num_mbs_per_sec, inst->core->resources.max_load);
@@ -1444,8 +1454,10 @@ static int msm_vidc_load_resources(int flipped_state,
 	if (inst->core->resources.has_ocmem) {
 		ocmem_sz = get_ocmem_requirement(inst->prop.height,
 						inst->prop.width);
+		mutex_lock(&inst->core->sync_lock);
 		rc = msm_comm_scale_bus(inst->core, inst->session_type,
 					OCMEM_MEM);
+		mutex_unlock(&inst->core->sync_lock);
 		if (!rc) {
 			mutex_lock(&inst->core->sync_lock);
 			rc = call_hfi_op(hdev, alloc_ocmem,

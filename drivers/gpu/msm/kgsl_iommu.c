@@ -349,6 +349,38 @@ static int kgsl_iommu_fault_handler(struct iommu_domain *domain,
 	}
 	iommu = mmu->priv;
 
+	/*
+	 * set the fault bits and stuff before any printks so that if fault
+	 * handler runs then it will know it's dealing with a pagefault
+	 */
+	kgsl_sharedmem_readl(&device->memstore, &curr_context_id,
+		KGSL_MEMSTORE_OFFSET(KGSL_MEMSTORE_GLOBAL, current_context));
+
+	context = kgsl_context_get(device, curr_context_id);
+
+	if (context != NULL) {
+		kgsl_sharedmem_readl(&device->memstore, &curr_global_ts,
+			KGSL_MEMSTORE_OFFSET(KGSL_MEMSTORE_GLOBAL,
+			eoptimestamp));
+
+		/* save pagefault timestamp for GFT */
+		set_bit(KGSL_CONTEXT_PAGEFAULT, &context->priv);
+		context->pagefault_ts = curr_global_ts;
+
+		kgsl_context_put(context);
+		context = NULL;
+	}
+
+	atomic_set(&mmu->fault, 1);
+	iommu_dev->fault = 1;
+
+	if (adreno_dev->ft_pf_policy & KGSL_FT_PAGEFAULT_GPUHALT_ENABLE) {
+		adreno_set_gpu_fault(adreno_dev, ADRENO_IOMMU_PAGE_FAULT);
+		/* turn off GPU IRQ so we don't get faults from it too */
+		kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_OFF);
+		adreno_dispatcher_schedule(device);
+	}
+
 	ptbase = KGSL_IOMMU_GET_CTX_REG(iommu, iommu_unit,
 					iommu_dev->ctx_id, TTBR0);
 
@@ -399,27 +431,6 @@ static int kgsl_iommu_fault_handler(struct iommu_domain *domain,
 
 	}
 
-	atomic_set(&mmu->fault, 1);
-	iommu_dev->fault = 1;
-
-	kgsl_sharedmem_readl(&device->memstore, &curr_context_id,
-		KGSL_MEMSTORE_OFFSET(KGSL_MEMSTORE_GLOBAL, current_context));
-
-	context = kgsl_context_get(device, curr_context_id);
-
-	if (context != NULL) {
-		kgsl_sharedmem_readl(&device->memstore, &curr_global_ts,
-			KGSL_MEMSTORE_OFFSET(KGSL_MEMSTORE_GLOBAL,
-			eoptimestamp));
-
-		/* save pagefault timestamp for GFT */
-		set_bit(KGSL_CONTEXT_PAGEFAULT, &context->priv);
-		context->pagefault_ts = curr_global_ts;
-
-		kgsl_context_put(context);
-		context = NULL;
-	}
-
 	trace_kgsl_mmu_pagefault(iommu_dev->kgsldev, addr,
 			kgsl_mmu_get_ptname_from_ptbase(mmu, ptbase),
 			write ? "write" : "read");
@@ -430,13 +441,8 @@ static int kgsl_iommu_fault_handler(struct iommu_domain *domain,
 	 * the GPU and trigger a snapshot. To stall the transaction return
 	 * EBUSY error.
 	 */
-	if (adreno_dev->ft_pf_policy & KGSL_FT_PAGEFAULT_GPUHALT_ENABLE) {
-		/* turn off GPU IRQ so we don't get faults from it too */
-		kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_OFF);
-		adreno_set_gpu_fault(adreno_dev, ADRENO_IOMMU_PAGE_FAULT);
-		adreno_dispatcher_schedule(device);
+	if (adreno_dev->ft_pf_policy & KGSL_FT_PAGEFAULT_GPUHALT_ENABLE)
 		ret = -EBUSY;
-	}
 done:
 	return ret;
 }
@@ -1810,6 +1816,10 @@ void kgsl_iommu_pagefault_resume(struct kgsl_mmu *mmu)
 						iommu_unit,
 						iommu_unit->dev[j].ctx_id,
 						RESUME, 1);
+					KGSL_IOMMU_SET_CTX_REG(iommu,
+						iommu_unit,
+						iommu_unit->dev[j].ctx_id,
+						FSR, 0);
 					_iommu_unlock();
 					iommu_unit->dev[j].fault = 0;
 				}

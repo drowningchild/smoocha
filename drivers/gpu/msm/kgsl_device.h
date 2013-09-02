@@ -48,7 +48,6 @@
 #define KGSL_STATE_SLEEP	0x00000008
 #define KGSL_STATE_SUSPEND	0x00000010
 #define KGSL_STATE_HUNG		0x00000020
-#define KGSL_STATE_DUMP_AND_FT	0x00000040
 #define KGSL_STATE_SLUMBER	0x00000080
 
 #define KGSL_GRAPHICS_MEMORY_LOW_WATERMARK  0x1000000
@@ -277,6 +276,14 @@ struct kgsl_device {
 	 * dumped
 	 */
 	struct list_head snapshot_obj_list;
+	/* List of IB's to be dumped */
+	struct list_head snapshot_cp_list;
+	/* Work item that saves snapshot's frozen object data */
+	struct work_struct snapshot_obj_ws;
+	/* snapshot memory holding the hanging IB's objects in snapshot */
+	void *snapshot_cur_ib_objs;
+	/* Size of snapshot_cur_ib_objs */
+	int snapshot_cur_ib_objs_size;
 
 	/* Logging levels */
 	int cmd_log;
@@ -309,6 +316,9 @@ void kgsl_process_events(struct work_struct *work);
 			kgsl_idle_check),\
 	.ts_expired_ws  = __WORK_INITIALIZER((_dev).ts_expired_ws,\
 			kgsl_process_events),\
+	.snapshot_obj_ws = \
+		__WORK_INITIALIZER((_dev).snapshot_obj_ws,\
+		kgsl_snapshot_save_frozen_objs),\
 	.context_idr = IDR_INIT((_dev).context_idr),\
 	.events = LIST_HEAD_INIT((_dev).events),\
 	.events_pending_list = LIST_HEAD_INIT((_dev).events_pending_list), \
@@ -504,6 +514,7 @@ const char *kgsl_pwrstate_to_str(unsigned int state);
 int kgsl_device_snapshot_init(struct kgsl_device *device);
 int kgsl_device_snapshot(struct kgsl_device *device, int hang);
 void kgsl_device_snapshot_close(struct kgsl_device *device);
+void kgsl_snapshot_save_frozen_objs(struct work_struct *work);
 
 static inline struct kgsl_device_platform_data *
 kgsl_device_get_drvdata(struct kgsl_device *dev)

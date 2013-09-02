@@ -29,17 +29,33 @@
 #include <mach/clk-provider.h>
 #include <mach/msm_smem.h>
 #include <mach/msm_smd.h>
+#include <mach/rpm-smd.h>
+#include "spm.h"
 #include "board-dt.h"
 #include "clock.h"
 #include "devices.h"
 #include "platsmp.h"
 #include "modem_notifier.h"
+#include "pm.h"
 
 static struct clk_lookup msm_clocks_dummy[] = {
+	CLK_DUMMY("xo",          cxo_pil_lpass_clk, "fe200000.qcom,lpass", OFF),
+	CLK_DUMMY("core_clk",          q6ss_xo_clk, "fe200000.qcom,lpass", OFF),
+	CLK_DUMMY("bus_clk",  gcc_lpass_q6_axi_clk, "fe200000.qcom,lpass", OFF),
+	CLK_DUMMY("iface_clk", q6ss_ahb_lfabif_clk, "fe200000.qcom,lpass", OFF),
+	CLK_DUMMY("reg_clk",         q6ss_ahbm_clk, "fe200000.qcom,lpass", OFF),
+
+	CLK_DUMMY("core_clk",  venus_vcodec0_clk,  "fdce0000.qcom,venus", OFF),
+	CLK_DUMMY("iface_clk", venus_ahb_clk,      "fdce0000.qcom,venus", OFF),
+	CLK_DUMMY("bus_clk",   venus_axi_clk,      "fdce0000.qcom,venus", OFF),
+	CLK_DUMMY("mem_clk",   venus_ocmemnoc_clk, "fdce0000.qcom,venus", OFF),
+	CLK_DUMMY("core_clk",  venus_vcodec0_clk,  "fd8c1024.qcom,gdsc",  OFF),
+
 	CLK_DUMMY("xo",                CXO_CLK, "fc880000.qcom,mss", OFF),
 	CLK_DUMMY("bus_clk",   MSS_BIMC_Q6_CLK, "fc880000.qcom,mss", OFF),
 	CLK_DUMMY("iface_clk", MSS_CFG_AHB_CLK, "fc880000.qcom,mss", OFF),
 	CLK_DUMMY("mem_clk",  BOOT_ROM_AHB_CLK, "fc880000.qcom,mss", OFF),
+	CLK_DUMMY("xo",		XO_CLK,		"fb21b000.qcom,pronto", OFF),
 	CLK_DUMMY("core_clk",   BLSP1_UART_CLK, "f991f000.serial", OFF),
 	CLK_DUMMY("iface_clk",  BLSP1_UART_CLK, "f991f000.serial", OFF),
 	CLK_DUMMY("core_clk",   BLSP1_UART_CLK, "f991e000.serial", OFF),
@@ -56,6 +72,27 @@ static struct clk_lookup msm_clocks_dummy[] = {
 	CLK_DUMMY("core_clk",   SPI_CLK,        "spi_qsd.1",  OFF),
 	CLK_DUMMY("iface_clk",  SPI_P_CLK,      "spi_qsd.1",  OFF),
 	CLK_DUMMY("core_clk", gcc_prng_ahb_clk.c, "f9bff000.qcom,msm-rng", OFF),
+	CLK_DUMMY("core_clk",	I2C_CLK,	"f9924000.i2c", OFF),
+	CLK_DUMMY("iface_clk",	I2C_P_CLK,	"f9924000.i2c", OFF),
+
+	/* CoreSight clocks */
+	CLK_DUMMY("core_clk", qdss_clk.c, "fc326000.tmc", OFF),
+	CLK_DUMMY("core_clk", qdss_clk.c, "fc324000.replicator", OFF),
+	CLK_DUMMY("core_clk", qdss_clk.c, "fc325000.tmc", OFF),
+	CLK_DUMMY("core_clk", qdss_clk.c, "fc323000.funnel", OFF),
+	CLK_DUMMY("core_clk", qdss_clk.c, "fc321000.funnel", OFF),
+	CLK_DUMMY("core_clk", qdss_clk.c, "fc322000.funnel", OFF),
+	CLK_DUMMY("core_clk", qdss_clk.c, "fc355000.funnel", OFF),
+	CLK_DUMMY("core_clk", qdss_clk.c, "fc302000.stm", OFF),
+
+	CLK_DUMMY("core_a_clk", qdss_a_clk.c, "fc326000.tmc", OFF),
+	CLK_DUMMY("core_a_clk", qdss_a_clk.c, "fc324000.replicator", OFF),
+	CLK_DUMMY("core_a_clk", qdss_a_clk.c, "fc325000.tmc", OFF),
+	CLK_DUMMY("core_a_clk", qdss_a_clk.c, "fc323000.funnel", OFF),
+	CLK_DUMMY("core_a_clk", qdss_a_clk.c, "fc321000.funnel", OFF),
+	CLK_DUMMY("core_a_clk", qdss_a_clk.c, "fc322000.funnel", OFF),
+	CLK_DUMMY("core_a_clk", qdss_a_clk.c, "fc355000.funnel", OFF),
+	CLK_DUMMY("core_a_clk", qdss_a_clk.c, "fc302000.stm", OFF),
 };
 
 static struct clock_init_data msm_dummy_clock_init_data __initdata = {
@@ -120,6 +157,9 @@ void __init msmsamarium_add_drivers(void)
 	msm_smem_init();
 	msm_init_modem_notifier_list();
 	msm_smd_init();
+	msm_rpm_driver_init();
+	msm_pm_sleep_status_init();
+	msm_spm_device_init();
 	msm_clock_init(&msm_dummy_clock_init_data);
 	tsens_tm_init_driver();
 }

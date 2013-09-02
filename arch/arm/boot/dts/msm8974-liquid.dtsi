@@ -24,8 +24,13 @@
 		status = "ok";
 	};
 
+        qcom,mdss_mdp@fd900000 {
+                qcom,mdss-pref-prim-intf = "edp";
+        };
+
 	qcom,mdss_edp@fd923400 {
 		status = "ok";
+		qcom,cont-splash-enabled;
 	};
 
 	i2c@f9967000 {
@@ -120,6 +125,7 @@
 			interrupts = <61 0x2>;
 			vdd_ana-supply = <&pm8941_l22>;
 			vcc_i2c-supply = <&pm8941_s3>;
+			atmel,i2cmode-gpio = <&msmgpio 59 0x00>;
 			atmel,reset-gpio = <&msmgpio 60 0x00>;
 			atmel,irq-gpio = <&msmgpio 61 0x00>;
 			atmel,panel-coords = <0 0 1080 1920>;
@@ -397,7 +403,7 @@
 		                1 &intc 0 148 0
 		                2 &msmgpio 144 0x8>;
 			interrupt-names = "core_irq", "async_irq", "wakeup";
-			HSIC_VDDCX-supply = <&pm8841_s2>;
+			hsic_vdd_dig-supply = <&pm8841_s2_corner>;
 			HSIC_GDSC-supply = <&gdsc_usb_hsic>;
 			hsic,strobe-gpio = <&msmgpio 144 0x00>;
 			hsic,data-gpio = <&msmgpio 145 0x00>;
@@ -405,6 +411,7 @@
 			hsic,strobe-pad-offset = <0x2050>;
 			hsic,data-pad-offset = <0x2054>;
 			qcom,phy-susp-sof-workaround;
+			hsic,vdd-voltage-level = <1 5 7>;
 
 			qcom,msm-bus,name = "hsic";
 			qcom,msm-bus,num-cases = <2>;

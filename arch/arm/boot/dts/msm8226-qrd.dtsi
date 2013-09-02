@@ -10,7 +10,6 @@
  * GNU General Public License for more details.
  */
 
-/include/ "dsi-panel-nt35596-1080p-video.dtsi"
 /include/ "msm8226-camera-sensor-qrd.dtsi"
 
 &soc {
@@ -30,8 +29,6 @@
 			synaptics,irq-gpio = <&msmgpio 17 0x2008>;
 			synaptics,button-map = <139 102 158>;
 			synaptics,i2c-pull-up;
-			synaptics,power-down;
-			synaptics,disable-gpios;
 		};
 		focaltech@38 {
 			compatible = "focaltech,5x06";
@@ -475,4 +472,16 @@
 
 &android_usb {
 	qcom,android-usb-cdrom;
+};
+
+&mdss_mdp {
+	qcom,mdss-pref-prim-intf = "dsi";
+};
+
+&mdss_dsi0 {
+	qcom,dsi-pref-prim-pan = <&dsi_nt35596_1080_vid>;
+};
+
+&dsi_nt35596_1080_vid {
+	qcom,cont-splash-enabled;
 };

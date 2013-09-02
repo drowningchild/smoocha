@@ -229,7 +229,10 @@ enum usb_vdd_value {
  *              between 1 to 7.
  * @l1_supported: enable link power management support.
  * @dpdm_pulldown_added: Indicates whether pull down resistors are
-		connected on data lines or not.
+ *		connected on data lines or not.
+ * @vddmin_gpio: dedictaed gpio in the platform that is used
+ *		for pullup the D+ line in case of bus suspend
+ *		with phy retention.
  */
 struct msm_otg_platform_data {
 	int *phy_init_seq;
@@ -258,6 +261,7 @@ struct msm_otg_platform_data {
 	int log2_itc;
 	bool l1_supported;
 	bool dpdm_pulldown_added;
+	int vddmin_gpio;
 };
 
 /* phy related flags */
@@ -337,6 +341,7 @@ struct msm_otg_platform_data {
  * @bus_perf_client: Bus performance client handle to request BUS bandwidth
  * @mhl_enabled: MHL driver registration successful and MHL enabled.
  * @host_bus_suspend: indicates host bus suspend or not.
+ * @device_bus_suspend: indicates device bus suspend or not.
  * @chg_check_timer: The timer used to implement the workaround to detect
  *               very slow plug in of wall charger.
  */
@@ -394,6 +399,7 @@ struct msm_otg {
 	uint32_t bus_perf_client;
 	bool mhl_enabled;
 	bool host_bus_suspend;
+	bool device_bus_suspend;
 	struct timer_list chg_check_timer;
 	/*
 	 * Allowing PHY power collpase turns off the HSUSB 3.3v and 1.8v
@@ -563,6 +569,7 @@ static inline void msm_hw_bam_disable(bool bam_disable)
 #ifdef CONFIG_USB_DWC3_MSM
 int msm_ep_config(struct usb_ep *ep);
 int msm_ep_unconfig(struct usb_ep *ep);
+void dwc3_tx_fifo_resize_request(struct usb_ep *ep, bool qdss_enable);
 int msm_data_fifo_config(struct usb_ep *ep, u32 addr, u32 size,
 	u8 dst_pipe_idx);
 
@@ -584,6 +591,12 @@ static inline int msm_ep_config(struct usb_ep *ep)
 static inline int msm_ep_unconfig(struct usb_ep *ep)
 {
 	return -ENODEV;
+}
+
+static inline void dwc3_tx_fifo_resize_request(
+					struct usb_ep *ep, bool qdss_enable)
+{
+	return;
 }
 
 static inline void msm_dwc3_restart_usb_session(struct usb_gadget *gadget)

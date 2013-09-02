@@ -95,7 +95,7 @@ static int kpss_div2_get_div(struct div_clk *div)
 
 	spin_lock_irqsave(&kpss_clock_reg_lock, flags);
 	regval = get_l2_indirect_reg(div->offset);
-	val = (regval >> div->shift) && div->mask;
+	val = (regval >> div->shift) & div->mask;
 	regval &= ~(div->mask << div->shift);
 	set_l2_indirect_reg(div->offset, regval);
 	spin_unlock_irqrestore(&kpss_clock_reg_lock, flags);
@@ -394,9 +394,6 @@ static int kpss_cpu_pre_set_rate(struct clk *c, unsigned long new_rate)
 	struct kpss_core_clk *cpu = to_kpss_core_clk(c);
 	u32 dscr = find_dscr(cpu->avs_tbl, c->rate);
 
-	if (!c->prepare_count)
-		return -ENODEV;
-
 	if (dscr)
 		AVS_DISABLE(cpu->id);
 	return 0;
@@ -412,9 +409,6 @@ static long kpss_core_round_rate(struct clk *c, unsigned long rate)
 
 static int kpss_core_set_rate(struct clk *c, unsigned long rate)
 {
-	if (!c->prepare_count)
-		return -ENODEV;
-
 	return clk_set_rate(c->parent, rate);
 }
 
